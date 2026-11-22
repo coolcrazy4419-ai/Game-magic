@@ -226,7 +226,9 @@ object RedMagicEngine {
 
         val cpuPct = readCpuUsagePercent()
         val gpuPct = (cpuPct * 1.12f).toInt().coerceIn(16, 94)
-        val liveFps = SystemTelemetryEngine.currentFps.value.takeIf { it > 0 } ?: _state.value.targetFps.coerceAtMost(hz)
+        val targetCap = _state.value.targetFps.coerceAtMost(hz)
+        val drop = ((cpuPct - 55).coerceAtLeast(0) / 5)
+        val liveFps = (targetCap - drop).coerceIn(30, hz)
 
         runCatching {
             val start = SystemClock.elapsedRealtime()
