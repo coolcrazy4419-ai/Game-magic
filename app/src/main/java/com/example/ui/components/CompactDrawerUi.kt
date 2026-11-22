@@ -107,15 +107,6 @@ sealed interface MagicSidebarAction {
     data class ToggleFastAnimations(val enabled: Boolean) : MagicSidebarAction
 }
 
-/**
- * Upgraded Pro Game Magic Floating Drawer (`228.dp` ~42% screen width, max `76%` height).
- * Features:
- *  - Enhanced multi-ring Neon Glow border
- *  - Icon-tile grid (tap icon to toggle ON/OFF, label underneath—no side switches)
- *  - 10 In-Game Visual & Smoothness Filters
- *  - Screen Recorder, Clear Memory, Floating Call Attend, Smart Voice-Chat Mic, DND Swipe Blocker
- *  - Expandable `More ▼` section preserving 100% of original tools (Ping Shield, Heat/Battery alerts, Voice Presets, Crosshair, Sidebar Setup)
- */
 @Composable
 fun CompactSwipeUpSidebar(
     settings: MagicSettings,
@@ -178,8 +169,8 @@ fun CompactSwipeUpSidebar(
         shape = panelShape,
         color = Color.Transparent,
         modifier = Modifier
-            .width(228.dp)
-            .fillMaxHeight(0.76f)
+            .width(212.dp)
+            .fillMaxHeight(0.72f)
             .darkNeonGlow(accent, cornerRadius = 18.dp, glowAlpha = 0.52f, strokeWidth = 1.4.dp)
             .border(
                 width = 1.2.dp,
@@ -208,7 +199,6 @@ fun CompactSwipeUpSidebar(
                     )
                 )
         ) {
-            // Dual-Ring Emerald & Royal Violet Shockwave Animation
             if (shockwave.value in 0.01f..0.99f) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val p = shockwave.value
@@ -243,11 +233,10 @@ fun CompactSwipeUpSidebar(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 9.dp, vertical = 9.dp)
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                // ===== 1. LIVE TELEMETRY HEADER =====
                 TelemetryHeaderBlock(
                     settings = settings,
                     clockText = clockText,
@@ -257,14 +246,12 @@ fun CompactSwipeUpSidebar(
                     onClose = onClose
                 )
 
-                // ===== 2. 4-THEME PERFORMANCE MODE PILL SELECTOR =====
                 PerformanceModePillGrid(
                     settings = settings,
                     onSelectMode = { mode -> onAction(MagicSidebarAction.SetPerformanceMode(mode)) },
                     onToggleIceCooling = { onAction(MagicSidebarAction.ToggleIceCooling(!settings.iceCoolingEnabled)) }
                 )
 
-                // ===== 3. ICON-GRID GAMING CONTROLS (TAP ICON TO TOGGLE ON/OFF, NAME UNDERNEATH) =====
                 Text(
                     text = "PRO GAMING CONTROLS",
                     color = accent,
@@ -273,10 +260,9 @@ fun CompactSwipeUpSidebar(
                     letterSpacing = 0.8.sp
                 )
 
-                // Row 1: Clear Memory | Screen Rec | Game Filters
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     IconFeatureTile(
                         icon = Icons.Rounded.CleaningServices,
@@ -306,7 +292,6 @@ fun CompactSwipeUpSidebar(
                     )
                 }
 
-                // Expandable 10 In-Game Visual & Smoothness Filters Grid
                 AnimatedVisibility(
                     visible = showFilterTray,
                     enter = expandVertically(),
@@ -372,11 +357,9 @@ fun CompactSwipeUpSidebar(
                         }
                     }
                 }
-
-                // Row 2: DND + Blocker | In-Game Call | Smart Voice Mic
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     IconFeatureTile(
                         icon = Icons.Rounded.DoNotDisturbOn,
@@ -408,13 +391,584 @@ fun CompactSwipeUpSidebar(
                     )
                 }
 
-                // Row 3: Crosshair | Screenshot | Touch Guard
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     IconFeatureTile(
                         icon = Icons.Rounded.GpsFixed,
                         label = "Crosshair",
                         active = settings.crosshairEnabled,
-                        glowColor = EmeraldGlow
+                        glowColor = EmeraldGlow,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onAction(MagicSidebarAction.ToggleCrosshair(!settings.crosshairEnabled)) }
+                    )
+                    IconFeatureTile(
+                        icon = Icons.Rounded.Screenshot,
+                        label = "Screenshot",
+                        active = false,
+                        glowColor = BalancedCyanGlow,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onAction(MagicSidebarAction.TakeScreenshot) }
+                    )
+                    IconFeatureTile(
+                        icon = Icons.Rounded.SwipeVertical,
+                        label = "Swipe Lock",
+                        active = settings.touchGuardEnabled,
+                        glowColor = IceBlueGlow,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onAction(MagicSidebarAction.ToggleTouchGuard(!settings.touchGuardEnabled)) }
+                    )
+                }
+
+                Surface(
+                    color = ObsidianCard.copy(alpha = 0.92f),
+                    shape = RoundedCornerShape(9.dp),
+                    border = BorderStroke(0.85.dp, accent.copy(alpha = 0.55f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showMoreSection = !showMoreSection }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 6.dp, horizontal = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (showMoreSection) "LESS OPTIONS" else "MORE OPTIONS",
+                            color = accent,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.8.sp
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            imageVector = if (showMoreSection) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = showMoreSection,
+                    enter = expandVertically(),
+                    exit = shrinkVertically()
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            IconFeatureTile(
+                                icon = Icons.Rounded.Speed,
+                                label = "Smooth FPS",
+                                active = settings.sustainedPerformanceEnabled,
+                                glowColor = EmeraldGlow,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    onAction(MagicSidebarAction.ToggleSustainedPerformance(!settings.sustainedPerformanceEnabled))
+                                }
+                            )
+                            IconFeatureTile(
+                                icon = Icons.Rounded.Schedule,
+                                label = "24h Clock",
+                                active = settings.use24HourClock,
+                                glowColor = BalancedCyanGlow,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    onAction(MagicSidebarAction.Toggle24HourClock(!settings.use24HourClock))
+                                }
+                            )
+                            IconFeatureTile(
+                                icon = Icons.Rounded.Hearing,
+                                label = "Mic Monitor",
+                                active = settings.liveMicMonitorEnabled,
+                                glowColor = HeavyVioletAccent,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    onAction(MagicSidebarAction.ToggleLiveMicMonitor(!settings.liveMicMonitorEnabled))
+                                }
+                            )
+                        }
+
+                        CompactSectionCard(title = "VOICE CHAT & MIC DSP", accent = HeavyPurpleGlow) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                MiniPillButton(
+                                    label = if (smartVoiceChatMicOnly) "Voice Chat Only: ON" else "Always On Mic",
+                                    tint = if (smartVoiceChatMicOnly) EmeraldGlow else WarningAmberGlow,
+                                    highlighted = smartVoiceChatMicOnly
+                                ) {
+                                    onAction(MagicSidebarAction.ToggleSmartVoiceMic(!smartVoiceChatMicOnly))
+                                }
+                            }
+                            VoicePreset.entries.chunked(2).forEach { pair ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    pair.forEach { preset ->
+                                        val selected = settings.voicePreset == preset
+                                        Surface(
+                                            color = if (selected) HeavyFillDeep else ObsidianGreenBg,
+                                            shape = RoundedCornerShape(6.dp),
+                                            border = BorderStroke(0.75.dp, if (selected) HeavyPurpleGlow else ObsidianDivider),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { onAction(MagicSidebarAction.SelectVoicePreset(preset)) }
+                                        ) {
+                                            Box(Modifier.padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+                                                Text(
+                                                    text = preset.label,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (selected) Color.White else MagicTextSecondary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (settings.crosshairEnabled) {
+                            CompactSectionCard(title = "CROSSHAIR SETUP", accent = EmeraldGlow) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    MiniPillButton(settings.crosshairStyle.label, EmeraldGlow, true) {
+                                        onAction(MagicSidebarAction.CycleCrosshairStyle)
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        MiniPillButton("-", MagicTextSecondary) { onAction(MagicSidebarAction.AdjustCrosshairSize(-2)) }
+                                        MiniPillButton("+", MagicTextSecondary) { onAction(MagicSidebarAction.AdjustCrosshairSize(2)) }
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    crosshairColors.forEach { hex ->
+                                        val picked = settings.crosshairColorHex == hex
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(hex))
+                                                .border(if (picked) 1.6.dp else 0.6.dp, if (picked) Color.White else ObsidianDivider, CircleShape)
+                                                .clickable { onAction(MagicSidebarAction.SetCrosshairColor(hex)) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        CompactSectionCard(title = "THERMAL & BATTERY ALERTS", accent = IceBlueGlow) {
+                            if (settings.iceCoolingEnabled && settings.coolingBaselineTempC > 0f) {
+                                val drop = (settings.coolingBaselineTempC - sysStats.batteryTempC).coerceAtLeast(0f)
+                                Text(
+                                    text = if (drop > 0.05f) "Ice-Cooling Active (-${"%.1f".format(drop)}°C)" else "Ice-Cooling Throttling Active",
+                                    fontSize = 9.sp,
+                                    color = IceBlueGlow,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Heat Alert", fontSize = 9.sp, color = MagicTextSecondary)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf(41f to "41°C", 43f to "43°C").forEach { (temp, lbl) ->
+                                        val active = settings.overheatThresholdC == temp
+                                        MiniPillButton(lbl, if (active) UltraCrimsonGlow else MagicTextSecondary, active) {
+                                            onAction(MagicSidebarAction.SetOverheatThreshold(temp))
+                                        }
+                                    }
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Low Bat", fontSize = 9.sp, color = MagicTextSecondary)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf(15 to "15%", 20 to "20%").forEach { (pct, lbl) ->
+                                        val active = settings.lowBatteryThresholdPct == pct
+                                        MiniPillButton(lbl, if (active) WarningAmberGlow else MagicTextSecondary, active) {
+                                            onAction(MagicSidebarAction.SetLowBatteryThreshold(pct))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        CompactSectionCard(title = "PING SHIELD", accent = BalancedCyanGlow) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${netStats.transport.label} • ${netStats.signalBars}/4 (${netStats.rssiDbm}dBm)",
+                                    fontSize = 8.5.sp,
+                                    color = if (netStats.isWarningActive) WarningAmberGlow else EmeraldGlow
+                                )
+                                MiniPillButton(
+                                    label = if (settings.pingShieldEnabled) "Alert ON" else "Alert OFF",
+                                    tint = if (settings.pingShieldEnabled) BalancedCyanGlow else MagicTextSecondary,
+                                    highlighted = settings.pingShieldEnabled
+                                ) {
+                                    onAction(MagicSidebarAction.TogglePingShield(!settings.pingShieldEnabled))
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf(80, 120, 180).forEach { limit ->
+                                    val active = settings.pingAlertThresholdMs == limit
+                                    Surface(
+                                        color = if (active) BalancedFillDeep else ObsidianGreenBg,
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = BorderStroke(0.7.dp, if (active) BalancedCyanGlow else ObsidianDivider),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable { onAction(MagicSidebarAction.SetPingThreshold(limit)) }
+                                    ) {
+                                        Box(Modifier.padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+                                            Text("${limit}ms", fontSize = 8.sp, color = if (active) Color.White else MagicTextSecondary, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        CompactSectionCard(title = "SIDEBAR SETUP", accent = EmeraldGlow) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Edge Side", fontSize = 9.sp, color = MagicTextSecondary)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    MiniPillButton("L", if (settings.edgeOnLeft) EmeraldGlow else MagicTextSecondary, settings.edgeOnLeft) {
+                                        onAction(MagicSidebarAction.SetEdgeOnLeft(true))
+                                    }
+                                    MiniPillButton("R", if (!settings.edgeOnLeft) EmeraldGlow else MagicTextSecondary, !settings.edgeOnLeft) {
+                                        onAction(MagicSidebarAction.SetEdgeOnLeft(false))
+                                    }
+                                }
+                            }
+                            Text("Icon Size (${"%.1f".format(settings.edgeSizeScale)}x)", fontSize = 9.sp, color = MagicTextSecondary)
+                            Slider(
+                                value = settings.edgeSizeScale,
+                                onValueChange = { onAction(MagicSidebarAction.SetEdgeSize(it)) },
+                                valueRange = 0.8f..1.4f,
+                                colors = SliderDefaults.colors(thumbColor = EmeraldGlow, activeTrackColor = EmeraldGlow),
+                                modifier = Modifier.height(22.dp)
+                            )
+                            Text("Opacity (${(settings.edgeOpacity * 100).toInt()}%)", fontSize = 9.sp, color = MagicTextSecondary)
+                            Slider(
+                                value = settings.edgeOpacity,
+                                onValueChange = { onAction(MagicSidebarAction.SetEdgeOpacity(it)) },
+                                valueRange = 0.35f..1.0f,
+                                colors = SliderDefaults.colors(thumbColor = EmeraldGlow, activeTrackColor = EmeraldGlow),
+                                modifier = Modifier.height(22.dp)
+                            )
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                MiniPillButton(
+                                    label = if (settings.soundEffectsEnabled) "Sounds: ON" else "Sounds: OFF",
+                                    tint = if (settings.soundEffectsEnabled) EmeraldGlow else MagicTextSecondary,
+                                    highlighted = settings.soundEffectsEnabled
+                                ) {
+                                    onAction(MagicSidebarAction.ToggleSoundEffects(!settings.soundEffectsEnabled))
+                                }
+                                MiniPillButton(
+                                    label = if (settings.fastAnimationsEnabled) "Fast Anim: ON" else "Fast Anim: OFF",
+                                    tint = if (settings.fastAnimationsEnabled) BalancedCyanGlow else MagicTextSecondary,
+                                    highlighted = settings.fastAnimationsEnabled
+                                ) {
+                                    onAction(MagicSidebarAction.ToggleFastAnimations(!settings.fastAnimationsEnabled))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+@Composable
+private fun IconFeatureTile(
+    icon: ImageVector,
+    label: String,
+    active: Boolean,
+    glowColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val tileModifier = if (active) {
+        modifier.darkNeonGlow(glowColor, cornerRadius = 11.dp, glowAlpha = 0.42f, strokeWidth = 1.dp)
+    } else {
+        modifier
+    }
+
+    Surface(
+        color = if (active) glowColor.copy(alpha = 0.18f) else ObsidianCard.copy(alpha = 0.9f),
+        shape = RoundedCornerShape(11.dp),
+        border = BorderStroke(
+            width = if (active) 1.dp else 0.7.dp,
+            color = if (active) glowColor else ObsidianDivider
+        ),
+        modifier = tileModifier.clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(vertical = 7.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(27.dp)
+                    .clip(CircleShape)
+                    .background(if (active) glowColor.copy(alpha = 0.25f) else ObsidianGreenBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = if (active) glowColor else MagicTextSecondary,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Text(
+                text = label,
+                color = if (active) Color.White else MagicTextSecondary,
+                fontSize = 8.5.sp,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun TelemetryHeaderBlock(
+    settings: MagicSettings,
+    clockText: String,
+    sysStats: SystemTelemetry,
+    netStats: NetworkTelemetry,
+    accent: Color,
+    onClose: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = when {
+                        settings.iceCoolingEnabled -> "ICE-COOLING PRO"
+                        settings.performanceMode == PerformanceMode.ULTRA -> "ULTRA MAGIC PRO"
+                        settings.performanceMode == PerformanceMode.HEAVY -> "HEAVY MAGIC PRO"
+                        else -> "GAME MAGIC PRO"
+                    },
+                    color = accent,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.9.sp
+                )
+                Text(
+                    text = clockText.ifEmpty { "--:--:--" },
+                    color = MagicTextPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(23.dp)
+                    .clip(CircleShape)
+                    .background(ObsidianCard)
+                    .border(0.75.dp, accent.copy(alpha = 0.5f), CircleShape)
+                    .clickable { onClose() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.Close, contentDescription = "Close Drawer", tint = MagicTextSecondary, modifier = Modifier.size(13.dp))
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(ObsidianGreenBg.copy(alpha = 0.9f))
+                .border(0.85.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                .padding(horizontal = 7.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                MiniStat("${sysStats.liveFps} FPS", EmeraldGlow)
+                MiniStat("RAM ${sysStats.ramUsagePercent}%", BalancedCyanGlow)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                val tempColor = if (sysStats.batteryTempC >= settings.overheatThresholdC) UltraCrimsonGlow else IceBlueGlow
+                MiniStat("${"%.1f".format(sysStats.batteryTempC)}°C • ${sysStats.batteryPercent}%", tempColor)
+                val pingColor = when {
+                    netStats.pingMs < 0 -> MagicTextSecondary
+                    netStats.pingMs < settings.pingAlertThresholdMs -> EmeraldGlow
+                    else -> UltraCrimsonGlow
+                }
+                MiniStat(if (netStats.pingMs >= 0) "${netStats.pingMs}ms" else "--", pingColor)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PerformanceModePillGrid(
+    settings: MagicSettings,
+    onSelectMode: (PerformanceMode) -> Unit,
+    onToggleIceCooling: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            ModeThemePill(
+                label = "Balanced",
+                icon = Icons.Rounded.Eco,
+                selected = !settings.iceCoolingEnabled && settings.performanceMode == PerformanceMode.BALANCED,
+                fillColor = BalancedFillDark,
+                glowColor = BalancedCyanGlow,
+                modifier = Modifier.weight(1f),
+                onClick = { onSelectMode(PerformanceMode.BALANCED) }
+            )
+            ModeThemePill(
+                label = "Heavy",
+                icon = Icons.Rounded.LocalFireDepartment,
+                selected = !settings.iceCoolingEnabled && settings.performanceMode == PerformanceMode.HEAVY,
+                fillColor = HeavyFillDark,
+                glowColor = HeavyPurpleGlow,
+                modifier = Modifier.weight(1f),
+                onClick = { onSelectMode(PerformanceMode.HEAVY) }
+            )
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            ModeThemePill(
+                label = "Ultra",
+                icon = Icons.Rounded.Whatshot,
+                selected = !settings.iceCoolingEnabled && settings.performanceMode == PerformanceMode.ULTRA,
+                fillColor = UltraFillDark,
+                glowColor = UltraCrimsonGlow,
+                modifier = Modifier.weight(1f),
+                onClick = { onSelectMode(PerformanceMode.ULTRA) }
+            )
+            ModeThemePill(
+                label = "Ice-Cool",
+                icon = Icons.Rounded.AcUnit,
+                selected = settings.iceCoolingEnabled,
+                fillColor = IceFillDark,
+                glowColor = IceBlueGlow,
+                modifier = Modifier.weight(1f),
+                onClick = onToggleIceCooling
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModeThemePill(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    fillColor: Color,
+    glowColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val pillMod = if (selected) {
+        modifier.darkNeonGlow(glowColor, cornerRadius = 8.dp, glowAlpha = 0.38f, strokeWidth = 0.95.dp)
+    } else {
+        modifier
+    }
+
+    Surface(
+        color = if (selected) fillColor else ObsidianCard,
+        shape = RoundedCornerShape(8.dp),
+        border = if (!selected) BorderStroke(0.65.dp, ObsidianDivider) else null,
+        modifier = pillMod
+            .testTag("drawer_mode_${label.lowercase()}")
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 6.dp, horizontal = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (selected) glowColor else MagicTextSecondary,
+                modifier = Modifier.size(12.dp)
+            )
+            Spacer(Modifier.width(3.dp))
+            Text(
+                text = label,
+                color = if (selected) glowColor else MagicTextSecondary,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun MiniStat(text: String, color: Color) {
+    Text(text = text, color = color, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+}
+
+@Composable
+private fun CompactSectionCard(
+    title: String,
+    accent: Color,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(ObsidianCard.copy(alpha = 0.92f))
+            .border(0.75.dp, accent.copy(alpha = 0.42f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Text(
+            text = title,
+            color = accent,
+            fontSize = 8.5.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.7.sp
+        )
+        content()
+    }
+}
+
+@Composable
+private fun MiniPillButton(
+    label: String,
+    tint: Color,
+    highlighted: Boolean = false,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = if (highlighted) tint.copy(alpha = 0.22f) else ObsidianGreenBg,
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(0.75.dp, if (highlighted) tint else ObsidianDivider),
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Text(
+            text = label,
+            color = tint,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+        )
+    }
+} 
