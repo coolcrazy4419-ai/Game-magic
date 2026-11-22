@@ -8,10 +8,6 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.example.core.TurboSettingsStore
 
-/**
- * 100% Anti-Cheat Safe AccessibilityService listening strictly for TYPE_WINDOW_STATE_CHANGED.
- * Strictly ignores home launchers and non-added apps so Game Magic NEVER appears on the home screen.
- */
 class GameAccessibilityService : AccessibilityService() {
 
     companion object {
@@ -33,7 +29,7 @@ class GameAccessibilityService : AccessibilityService() {
         }
     }
 
-    private var lastForegroundPackage: String? = null
+    private var lastDispatchedState: Pair<String, Boolean>? = null
     private var cachedLauncherPackages: Set<String> = emptySet()
 
     override fun onServiceConnected() {
@@ -53,7 +49,7 @@ class GameAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun isHomeOrSystemOverlay(pkg: String): Boolean {
+    private fun isHomeLauncher(pkg: String): Boolean {
         if (cachedLauncherPackages.contains(pkg)) return true
         val lower = pkg.lowercase()
         return lower.contains("launcher") ||
@@ -64,34 +60,41 @@ class GameAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null || event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        val pkg = event.packageName?.toString() ?: return
-        val className = event.className?.toString().orEmpty()
+        if (event == null) return
+        val type = event.eventType
+        if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            type != AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        ) return
 
-        // Ignore transient IME keyboards and our own overlay windows (not MainActivity)
-        val isOurMainActivity = pkg == packageName && className.contains("MainActivity")
-        if ((pkg == packageName && !isOurMainActivity) ||
-            pkg.contains("inputmethod") ||
-            pkg.contains("keyboard")
+        val activePkg = rootInActiveWindow?.packageName?.toString()
+            ?: event.packageName?.toString()
+            ?: return
+
+        val className = event.className?.toString().orEmpty()
+        val isOurMainActivity = activePkg == packageName && className.contains("MainActivity")
+
+        if ((activePkg == packageName && !isOurMainActivity) ||
+            activePkg.contains("inputmethod") ||
+            activePkg.contains("keyboard")
         ) {
             return
         }
 
-        // Ignore transient system dialogs unless user pulled down notification shade / returned home
-        if (pkg == "com.android.systemui" && !className.contains("StatusBar") && !className.contains("NotificationShade")) {
+        if (activePkg == "com.android.systemui" && !isHomeLauncher(activePkg)) {
             return
         }
 
-        if (pkg == lastForegroundPackage) return
-        lastForegroundPackage = pkg
-
         val selected = TurboSettingsStore.state.value.selectedPackages
-        val isLauncher = isHomeOrSystemOverlay(pkg)
-        val isTrackedGame = !isLauncher && !isOurMainActivity && selected.contains(pkg)
+        val isLauncher = isHomeLauncher(activePkg)
+        val isTrackedGame = !isLauncher && !isOurMainActivity && selected.contains(activePkg)
+
+        val newState = activePkg to isTrackedGame
+        if (newState == lastDispatchedState) return
+        lastDispatchedState = newState
 
         val svcIntent = Intent(applicationContext, GameTurboOverlayService::class.java).apply {
             action = GameTurboOverlayService.ACTION_FOREGROUND_CHANGED
-            putExtra(GameTurboOverlayService.EXTRA_PACKAGE_NAME, pkg)
+            putExtra(GameTurboOverlayService.EXTRA_PACKAGE_NAME, activePkg)
             putExtra(GameTurboOverlayService.EXTRA_IS_GAME_ACTIVE, isTrackedGame)
         }
         try {
