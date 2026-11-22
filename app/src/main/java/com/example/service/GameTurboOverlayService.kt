@@ -1,6 +1,8 @@
 package com.example.service
 
 import android.Manifest
+import android.app.Activity
+import android.app.ActivityOptions
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,35 +10,33 @@ import android.app.PendingIntent
 import android.app.Service
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
-import android.content.BroadcastReceiver
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
-import android.media.AudioManager
+import android.graphics.Rect
+import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
+import android.media.MediaRecorder
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.MediaStore
 import android.provider.Settings
-import android.telecom.TelecomManager
-import android.telephony.TelephonyManager
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,18 +45,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.font.FontWeight
@@ -73,11 +67,8 @@ import com.example.MainActivity
 import com.example.R
 import com.example.core.*
 import com.example.ui.components.CompactSwipeUpSidebar
-import com.example.ui.components.GameVisualFilter
 import com.example.ui.components.MagicSidebarAction
-import com.example.ui.components.darkNeonGlow
-import com.example.ui.components.resolveModeAccent
-import com.example.ui.theme.*
+import com.example.ui.theme.GamingTurboTheme
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.math.roundToInt
@@ -90,8 +81,11 @@ class GameTurboOverlayService : Service() {
         const val ACTION_START = "com.gamemagic.action.START"
         const val ACTION_STOP = "com.gamemagic.action.STOP"
         const val ACTION_FOREGROUND_CHANGED = "com.gamemagic.action.FOREGROUND_CHANGED"
+        const val ACTION_RECORD_PROJECTION = "com.gamemagic.action.RECORD_PROJECTION"
         const val EXTRA_PACKAGE_NAME = "extra_pkg"
         const val EXTRA_IS_GAME_ACTIVE = "extra_is_game"
+        const val EXTRA_RESULT_CODE = "extra_res_code"
+        const val EXTRA_RESULT_DATA = "extra_res_data"
 
         private const val SAFE_OVERLAY_FLAGS =
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -110,62 +104,27 @@ class GameTurboOverlayService : Service() {
     private var edgeTriggerView: ComposeView? = null
     private var edgeParams: WindowManager.LayoutParams? = null
     private var panelHostView: ComposeView? = null
-    private var visualFilterOverlayView: ComposeView? = null
-    private var crosshairView: ComposeView? = null
-    private var touchGuardTopView: ComposeView? = null
-    private var touchGuardBottomView: ComposeView? = null
-    private var touchGuardLeftView: ComposeView? = null
-    private var touchGuardRightView: ComposeView? = null
-    private var alertBannerView: ComposeView? = null
-    private var incomingCallBannerView: ComposeView? = null
+    private var filterOverlayView: ComposeView? = null
+    private var statusBarBlockerView: ComposeView? = null
+    private var miniCounterView: ComposeView? = null
 
     private val isPanelExpanded = MutableStateFlow(false)
-    private val liveTelemetry = MutableStateFlow(SystemTelemetry())
-    private val liveAlertBanner = MutableStateFlow<Pair<String, Color>?>(null)
-    private val boostShockwavePulse = MutableStateFlow(0)
-    private val boostFreedReadout = MutableStateFlow<String?>(null)
-
-    private val activeVisualFilter = MutableStateFlow(GameVisualFilter.ORIGINAL)
-    private val isRecordingScreen = MutableStateFlow(false)
-    private val recordingSeconds = MutableStateFlow(0)
-    private val floatingCallEnabled = MutableStateFlow(true)
-    private val incomingCallNumber = MutableStateFlow<String?>(null)
-    private val smartVoiceChatMicOnly = MutableStateFlow(true)
-    private val isVoiceChatDetected = MutableStateFlow(false)
+    private val boostReadout = MutableStateFlow<String?>(null)
 
     private var activeGamePackage: String? = null
-    private var lastEdgeOnLeft: Boolean? = null
-    private var lastAlertPingMs: Long = 0L
+    private var monitorJob: Job? = null
     private var telemetryJob: Job? = null
-    private var fallbackMonitorJob: Job? = null
-    private var settingsWatchJob: Job? = null
-    private var recordingTimerJob: Job? = null
-    private var callReceiverRegistered = false
+    private var settingsJob: Job? = null
+    private var recordTimerJob: Job? = null
 
-    private val phoneStateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (activeGamePackage == null || !floatingCallEnabled.value) return
-            if (intent?.action == TelephonyManager.ACTION_PHONE_STATE_CHANGED) {
-                when (intent.getStringExtra(TelephonyManager.EXTRA_STATE)) {
-                    TelephonyManager.EXTRA_STATE_RINGING -> {
-                        @Suppress("DEPRECATION")
-                        val number = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER) ?: "Incoming Call"
-                        incomingCallNumber.value = number
-                        mainHandler.post { showIncomingCallPopup() }
-                    }
-                    TelephonyManager.EXTRA_STATE_IDLE,
-                    TelephonyManager.EXTRA_STATE_OFFHOOK -> {
-                        incomingCallNumber.value = null
-                        mainHandler.post { dismissIncomingCallPopup() }
-                    }
-                }
-            }
-        }
-    }
+    private var mediaProjection: MediaProjection? = null
+    private var mediaRecorder: MediaRecorder? = null
+    private var virtualDisplay: VirtualDisplay? = null
 
     override fun onCreate() {
         super.onCreate()
         TurboSettingsStore.init(applicationContext)
+        RedMagicEngine.init(applicationContext)
         NetworkMonitorEngine.registerCallback(applicationContext)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
@@ -178,42 +137,36 @@ class GameTurboOverlayService : Service() {
         }
         isRunning = true
 
-        registerCallReceiverSafely()
-        startSmartSleepTelemetryLoop()
-        startFallbackUsageMonitor()
+        startMonitorLoop()
+        startTelemetryLoop()
         observeSettings()
-    }
-
-    private fun registerCallReceiverSafely() {
-        if (callReceiverRegistered) return
-        runCatching {
-            val filter = IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(phoneStateReceiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                registerReceiver(phoneStateReceiver, filter)
-            }
-            callReceiverRegistered = true
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
                 activeGamePackage = null
-                mainHandler.post { hideAllGameOverlays() }
+                mainHandler.post { hideAllOverlays() }
                 stopSelf()
                 return START_NOT_STICKY
             }
             ACTION_START -> {
-                if (activeGamePackage == null) {
-                    mainHandler.post { hideAllGameOverlays() }
-                }
+                if (activeGamePackage == null) mainHandler.post { hideAllOverlays() }
             }
             ACTION_FOREGROUND_CHANGED -> {
                 val pkg = intent.getStringExtra(EXTRA_PACKAGE_NAME)
                 val isGame = intent.getBooleanExtra(EXTRA_IS_GAME_ACTIVE, false)
-                handleForegroundUpdate(pkg, isGame)
+                handleForeground(pkg, isGame)
+            }
+            ACTION_RECORD_PROJECTION -> {
+                val code = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
+                @Suppress("DEPRECATION")
+                val data = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+                if (code == Activity.RESULT_OK && data != null) {
+                    startRealScreenRecording(code, data)
+                } else {
+                    Toast.makeText(this, "Screen recording cancelled", Toast.LENGTH_SHORT).show()
+                }
             }
         }
         return START_STICKY
@@ -224,280 +177,200 @@ class GameTurboOverlayService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Game Magic Engine",
+            "Game Turbo Engine",
             NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Keeps the Game Magic floating sidebar and guards active inside added games"
-        }
+        )
         getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
-        val openIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, openIntent,
+        val pi = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.service_notification_title))
-            .setContentText(getString(R.string.service_notification_text))
+            .setContentText("Red Magic Game Turbo Ready")
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(pi)
             .setOngoing(true)
             .build()
     }
 
-    private fun handleForegroundUpdate(pkg: String?, isGameActive: Boolean) {
-        val safeIsGame = isGameActive && pkg != null && !isLauncherOrSystemPackage(pkg)
-        if (safeIsGame && pkg != null) {
+    private fun handleForeground(pkg: String?, isGame: Boolean) {
+        if (pkg != null && isTransientIgnoredPackage(pkg)) return
+        val safeGame = isGame && pkg != null && !isLauncherOrSystem(pkg)
+        if (safeGame && pkg != null) {
             if (activeGamePackage != pkg) {
                 activeGamePackage = pkg
+                RedMagicEngine.loadProfile(applicationContext, pkg)
                 onGameEntered()
             }
         } else {
             if (activeGamePackage != null || edgeTriggerView != null || panelHostView != null) {
                 activeGamePackage = null
+                RedMagicEngine.loadProfile(applicationContext, null)
                 onGameExited()
             }
         }
     }
 
     private fun onGameEntered() {
-        val s = TurboSettingsStore.state.value
-        if (s.dndEnabled) SystemTelemetryEngine.setDndEnabled(applicationContext, true)
-        syncSmartVoiceChangerState(s)
+        val rm = RedMagicEngine.state.value
+        if (rm.blockAlerts) SystemTelemetryEngine.setDndEnabled(applicationContext, true)
+        if (rm.voiceChanger) VoiceChangerEngine.start(applicationContext, VoicePreset.DEEP_PRO, false)
         mainHandler.post {
-            showEdgeTrigger()
-            syncAuxiliaryOverlays()
+            showEdgePill()
+            syncAuxOverlays()
         }
     }
 
     private fun onGameExited() {
-        val s = TurboSettingsStore.state.value
-        if (s.dndEnabled) SystemTelemetryEngine.setDndEnabled(applicationContext, false)
+        SystemTelemetryEngine.setDndEnabled(applicationContext, false)
         VoiceChangerEngine.stop()
         SystemTelemetryEngine.stopFpsMonitor()
-        stopRecordingTimer()
-        incomingCallNumber.value = null
-        mainHandler.post { hideAllGameOverlays() }
+        stopRealScreenRecording(showToast = false)
+        mainHandler.post { hideAllOverlays() }
     }
 
-    private fun syncSmartVoiceChangerState(s: MagicSettings) {
-        if (!s.voiceChangerEnabled || activeGamePackage == null) {
-            VoiceChangerEngine.stop()
-            isVoiceChatDetected.value = false
-            return
-        }
-        val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-        val inVoiceChat = am?.mode == AudioManager.MODE_IN_COMMUNICATION ||
-            (am?.isMicrophoneMute == false && am.mode == AudioManager.MODE_IN_CALL)
-        isVoiceChatDetected.value = inVoiceChat
-
-        val shouldRunDsp = !smartVoiceChatMicOnly.value || inVoiceChat || s.liveMicMonitorEnabled
-        if (shouldRunDsp) {
-            VoiceChangerEngine.start(applicationContext, s.voicePreset, s.liveMicMonitorEnabled)
-        } else {
-            VoiceChangerEngine.stop()
-        }
-    }
-
-    private fun startSmartSleepTelemetryLoop() {
+    // Ultra-lightweight telemetry loop: zero CPU overhead while playing
+    private fun startTelemetryLoop() {
         telemetryJob = serviceScope.launch {
             while (isActive) {
-                if (activeGamePackage == null) {
-                    delay(2500L)
+                val game = activeGamePackage
+                if (game == null) {
+                    delay(3500L)
                     continue
                 }
-
-                val expanded = isPanelExpanded.value
-                val s = TurboSettingsStore.state.value
-
-                syncSmartVoiceChangerState(s)
-
-                val sys = SystemTelemetryEngine.readTelemetry(applicationContext)
-                liveTelemetry.value = sys
-
-                val net = if (expanded || s.pingShieldEnabled) {
+                RedMagicEngine.addPlaytimeSeconds(applicationContext, game, 3L)
+                val rm = RedMagicEngine.state.value
+                if (isPanelExpanded.value || rm.showMiniFpsCounter) {
+                    RedMagicEngine.refreshHardware(applicationContext)
                     NetworkMonitorEngine.sampleOnce(applicationContext)
-                } else {
-                    NetworkMonitorEngine.telemetry.value
                 }
-
-                evaluateEarlyAlerts(sys, net, s)
-
-                val sleepMs = when {
-                    expanded -> 1500L
-                    s.iceCoolingEnabled -> 8000L
-                    else -> 4000L
-                }
-                delay(sleepMs)
+                delay(3000L)
             }
         }
     }
 
-    private fun evaluateEarlyAlerts(sys: SystemTelemetry, net: NetworkTelemetry, s: MagicSettings) {
-        val alert: Pair<String, Color>? = when {
-            sys.batteryTempC >= s.overheatThresholdC ->
-                "Overheat ${"%.1f".format(sys.batteryTempC)}°C • Enable Ice-Cool" to UltraCrimsonGlow
-            !sys.isCharging && sys.batteryPercent in 1..s.lowBatteryThresholdPct ->
-                "Low Battery ${sys.batteryPercent}% • Plug In" to WarningAmberGlow
-            s.pingShieldEnabled && net.isWarningActive && net.warningMessage != null ->
-                net.warningMessage!! to BalancedCyanGlow
-            else -> null
-        }
-
-        liveAlertBanner.value = alert
-        if (alert != null) {
-            val now = System.currentTimeMillis()
-            if (now - lastAlertPingMs > 18_000L) {
-                lastAlertPingMs = now
-                SoundManager.playAlertPing(applicationContext)
-            }
-            mainHandler.post { showTopEdgeAlertBanner() }
-        } else {
-            mainHandler.post { dismissTopEdgeAlertBanner() }
-        }
-    }
-
-    private fun startFallbackUsageMonitor() {
-        fallbackMonitorJob = serviceScope.launch {
+    private fun startMonitorLoop() {
+        monitorJob = serviceScope.launch {
             val usm = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             while (isActive) {
-                delay(650L)
+                delay(750L)
                 val selected = TurboSettingsStore.state.value.selectedPackages
-                    .filterNot { isLauncherOrSystemPackage(it) }
+                    .filterNot { isLauncherOrSystem(it) }
                     .toSet()
 
                 if (selected.isEmpty()) {
-                    if (activeGamePackage != null || edgeTriggerView != null) {
-                        handleForegroundUpdate(null, false)
-                    }
+                    if (activeGamePackage != null) handleForeground(null, false)
                     continue
                 }
 
                 var detectedPkg: String? = null
-
-                // 1. Check Accessibility window if non-null
                 val a11yPkg = GameAccessibilityService.instance?.rootInActiveWindow?.packageName?.toString()
-                if (a11yPkg != null && !a11yPkg.contains("inputmethod") && !a11yPkg.contains("keyboard")) {
+                if (a11yPkg != null && !isTransientIgnoredPackage(a11yPkg)) {
                     detectedPkg = a11yPkg
                 }
 
-                // 2. Also check UsageStatsManager (essential for full-screen games on HyperOS)
                 if (usm != null && (detectedPkg == null || detectedPkg == "com.android.systemui")) {
                     val end = System.currentTimeMillis()
-                    val events = usm.queryEvents(end - 6000L, end)
-                    val event = UsageEvents.Event()
-                    var latestForegroundPkg: String? = null
-                    var activeGamePaused = false
-
+                    val events = usm.queryEvents(end - 5000L, end)
+                    val ev = UsageEvents.Event()
+                    var latest: String? = null
                     while (events.hasNextEvent()) {
-                        events.getNextEvent(event)
-                        when (event.eventType) {
-                            UsageEvents.Event.MOVE_TO_FOREGROUND,
-                            UsageEvents.Event.ACTIVITY_RESUMED -> {
-                                latestForegroundPkg = event.packageName
-                                if (event.packageName == activeGamePackage) {
-                                    activeGamePaused = false
-                                }
-                            }
-                            UsageEvents.Event.MOVE_TO_BACKGROUND,
-                            UsageEvents.Event.ACTIVITY_PAUSED -> {
-                                if (event.packageName == activeGamePackage) {
-                                    activeGamePaused = true
-                                }
-                            }
+                        events.getNextEvent(ev)
+                        if (ev.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
+                            ev.eventType == UsageEvents.Event.ACTIVITY_RESUMED
+                        ) {
+                            latest = ev.packageName
                         }
                     }
-
-                    if (latestForegroundPkg != null) {
-                        detectedPkg = latestForegroundPkg
-                    } else if (activeGamePaused && activeGamePackage != null) {
-                        handleForegroundUpdate(null, false)
-                        continue
+                    if (latest != null && !isTransientIgnoredPackage(latest)) {
+                        detectedPkg = latest
                     }
                 }
 
                 if (detectedPkg != null) {
-                    val isGame = !isLauncherOrSystemPackage(detectedPkg) && selected.contains(detectedPkg)
-                    handleForegroundUpdate(detectedPkg, isGame)
+                    val isGame = !isLauncherOrSystem(detectedPkg) && selected.contains(detectedPkg)
+                    handleForeground(detectedPkg, isGame)
                 }
             }
         }
     }
 
-    private fun isLauncherOrSystemPackage(pkg: String): Boolean {
+    private fun isTransientIgnoredPackage(pkg: String): Boolean {
+        val l = pkg.lowercase()
+        return l.contains("inputmethod") ||
+            l.contains("keyboard") ||
+            l.contains("incallui") ||
+            l.contains("dialer") ||
+            l.contains("telecom") ||
+            l.contains("permissioncontroller") ||
+            l == "com.android.systemui"
+    }
+
+    private fun isLauncherOrSystem(pkg: String): Boolean {
         if (pkg == packageName || pkg == "com.android.systemui" || pkg == "android") return true
-        val lower = pkg.lowercase()
-        return lower.contains("launcher") ||
-            lower == "com.miui.home" ||
-            lower == "com.mi.android.globallauncher" ||
-            lower == "com.android.launcher3" ||
-            lower == "com.google.android.apps.nexuslauncher" ||
-            lower.contains("miui.securitycenter") ||
-            lower.contains("settings")
+        val l = pkg.lowercase()
+        return l.contains("launcher") ||
+            l == "com.miui.home" ||
+            l == "com.mi.android.globallauncher" ||
+            l == "com.android.launcher3" ||
+            l.contains("miui.securitycenter") ||
+            l.contains("settings")
     }
 
     private fun observeSettings() {
-        settingsWatchJob = serviceScope.launch {
-            TurboSettingsStore.state.collect { s ->
+        settingsJob = serviceScope.launch {
+            RedMagicEngine.state.collect {
                 if (activeGamePackage != null) {
-                    mainHandler.post {
-                        syncAuxiliaryOverlays()
-                        if (lastEdgeOnLeft != null && lastEdgeOnLeft != s.edgeOnLeft) {
-                            repositionEdgeSide(s.edgeOnLeft)
-                        }
-                        lastEdgeOnLeft = s.edgeOnLeft
-                    }
+                    mainHandler.post { syncAuxOverlays() }
                 }
             }
         }
     }
 
-    private fun repositionEdgeSide(onLeft: Boolean) {
-        val view = edgeTriggerView ?: return
-        val lp = edgeParams ?: return
-        lp.gravity = (if (onLeft) Gravity.START else Gravity.END) or Gravity.CENTER_VERTICAL
-        runCatching { windowManager.updateViewLayout(view, lp) }
-    }
-
-    private fun syncAuxiliaryOverlays() {
+    private fun syncAuxOverlays() {
         if (!Settings.canDrawOverlays(this)) return
-        val s = TurboSettingsStore.state.value
-
-        if (activeVisualFilter.value != GameVisualFilter.ORIGINAL) {
-            showOrUpdateVisualFilterOverlay()
-        } else {
-            dismissVisualFilterOverlay()
-        }
-
-        if (s.crosshairEnabled) showCrosshairOverlay() else dismissCrosshairOverlay()
-        if (s.touchGuardEnabled || s.dndEnabled) showTouchGuardOverlays() else dismissTouchGuardOverlays()
+        val rm = RedMagicEngine.state.value
+        if (rm.filter != RedMagicFilter.ORIGINAL || rm.hdrBoost) showFilterOverlay() else dismissFilterOverlay()
+        if (rm.lockControlCenter || rm.blockAlerts) showStatusBarShadeBlocker() else dismissStatusBarShadeBlocker()
+        if (rm.showMiniFpsCounter) showMiniFpsCounterOverlay() else dismissMiniFpsCounterOverlay()
     }
 
     private fun createComposeView(content: @Composable () -> Unit): ComposeView {
+        val owner = MyLifecycleOwner()
+        val vmOwner = MyViewModelStoreOwner()
+        owner.performRestore(null)
+        owner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        owner.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        owner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+
         return ComposeView(this).apply {
-            val owner = MyLifecycleOwner()
-            owner.performRestore(null)
-            owner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-            owner.handleLifecycleEvent(Lifecycle.Event.ON_START)
-            owner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+            setTag(R.id.service_notification_title, Pair(owner, vmOwner))
             setViewTreeLifecycleOwner(owner)
-            setViewTreeViewModelStoreOwner(MyViewModelStoreOwner())
+            setViewTreeViewModelStoreOwner(vmOwner)
             setViewTreeSavedStateRegistryOwner(owner)
-            setContent {
-                GamingTurboTheme {
-                    content()
-                }
-            }
+            setContent { GamingTurboTheme { content() } }
         }
     }
 
-    private fun showEdgeTrigger() {
-        if (!Settings.canDrawOverlays(this) || edgeTriggerView != null || activeGamePackage == null) return
-        val initialSettings = TurboSettingsStore.state.value
-        lastEdgeOnLeft = initialSettings.edgeOnLeft
+    private fun destroyComposeView(view: ComposeView?) {
+        view ?: return
+        runCatching {
+            @Suppress("UNCHECKED_CAST")
+            val tag = view.getTag(R.id.service_notification_title) as? Pair<MyLifecycleOwner, MyViewModelStoreOwner>
+            tag?.first?.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+            tag?.first?.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+            tag?.first?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            tag?.second?.clear()
+        }
+        runCatching { windowManager.removeView(view) }
+    }
 
+    private fun showEdgePill() {
+        if (!Settings.canDrawOverlays(this) || edgeTriggerView != null || activeGamePackage == null) return
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -505,110 +378,68 @@ class GameTurboOverlayService : Service() {
             SAFE_OVERLAY_FLAGS,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = (if (initialSettings.edgeOnLeft) Gravity.START else Gravity.END) or Gravity.CENTER_VERTICAL
-            y = 0
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            y = -60
         }
         edgeParams = params
 
         edgeTriggerView = createComposeView {
-            val s by TurboSettingsStore.state.collectAsStateWithLifecycle()
-            var interactTick by remember { mutableIntStateOf(0) }
-            var dimmed by remember { mutableStateOf(false) }
-
-            LaunchedEffect(interactTick) {
-                dimmed = false
-                delay(3000L)
-                dimmed = true
-            }
-
-            val accent = resolveModeAccent(s)
-            val targetAlpha = if (dimmed) (s.edgeOpacity * 0.45f).coerceAtLeast(0.25f) else s.edgeOpacity
-            val animatedAlpha by animateFloatAsState(
-                targetValue = targetAlpha,
-                animationSpec = tween(if (s.fastAnimationsEnabled) 180 else 360),
-                label = "edgeAlpha"
-            )
-
-            val pillW = (20f * s.edgeSizeScale).dp
-            val pillH = (62f * s.edgeSizeScale).dp
-            val shape = if (s.edgeOnLeft) {
-                RoundedCornerShape(topEnd = 13.dp, bottomEnd = 13.dp)
-            } else {
-                RoundedCornerShape(topStart = 13.dp, bottomStart = 13.dp)
-            }
-
+            val shape = RoundedCornerShape(topEnd = 14.dp, bottomEnd = 14.dp)
             var dragAccumX by remember { mutableFloatStateOf(0f) }
 
             Box(
                 modifier = Modifier
-                    .padding(vertical = 4.dp)
-                    .alpha(animatedAlpha)
-                    .width(pillW)
-                    .height(pillH)
+                    .width(20.dp)
+                    .height(68.dp)
                     .clip(shape)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(ObsidianGreenBg.copy(alpha = 0.94f), accent.copy(alpha = 0.45f), ObsidianGreenBg.copy(alpha = 0.94f))
-                        )
-                    )
-                    .border(1.2.dp, accent.copy(alpha = 0.95f), shape)
-                    .pointerInput(s.edgeOnLeft) {
+                    .background(Color(0xEA0B0B0E))
+                    .border(1.4.dp, Color(0xFFFF551A), shape)
+                    .pointerInput(Unit) {
                         detectDragGestures(
-                            onDragStart = {
-                                interactTick++
-                                dragAccumX = 0f
-                            },
+                            onDragStart = { dragAccumX = 0f },
                             onDragEnd = { dragAccumX = 0f },
                             onDrag = { change, dragAmount ->
                                 change.consume()
                                 dragAccumX += dragAmount.x
                                 if (kotlin.math.abs(dragAmount.y) > 0.5f) {
                                     edgeParams?.let { lp ->
-                                        lp.y = (lp.y + dragAmount.y.roundToInt()).coerceIn(-520, 520)
-                                        edgeTriggerView?.let { v ->
-                                            runCatching { windowManager.updateViewLayout(v, lp) }
-                                        }
+                                        lp.y = (lp.y + dragAmount.y.roundToInt()).coerceIn(-480, 480)
+                                        edgeTriggerView?.let { v -> runCatching { windowManager.updateViewLayout(v, lp) } }
                                     }
                                 }
-                                val swipedInward = if (s.edgeOnLeft) dragAccumX > 22f else dragAccumX < -22f
-                                if (swipedInward) {
+                                if (dragAccumX > 20f) {
                                     dragAccumX = 0f
-                                    openCompactDrawer()
+                                    openSidePanel()
                                 }
                             }
                         )
                     }
-                    .clickable {
-                        interactTick++
-                        openCompactDrawer()
-                    },
+                    .clickable { openSidePanel() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (s.edgeOnLeft) Icons.Rounded.ChevronRight else Icons.Rounded.ChevronLeft,
-                    contentDescription = "Open Game Magic",
-                    tint = accent,
-                    modifier = Modifier.size((15f * s.edgeSizeScale).dp)
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .height(34.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFF551A))
                 )
             }
         }
-
         runCatching { windowManager.addView(edgeTriggerView, params) }
     }
 
-    private fun openCompactDrawer() {
+    private fun openSidePanel() {
         if (!Settings.canDrawOverlays(this) || activeGamePackage == null) return
         if (panelHostView != null) {
             isPanelExpanded.value = true
             SystemTelemetryEngine.startFpsMonitor()
             return
         }
-
-        SoundManager.playPanelOpen(applicationContext)
         isPanelExpanded.value = true
         SystemTelemetryEngine.startFpsMonitor()
+        RedMagicEngine.refreshHardware(applicationContext)
 
-        val sNow = TurboSettingsStore.state.value
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -618,281 +449,244 @@ class GameTurboOverlayService : Service() {
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = (if (sNow.edgeOnLeft) Gravity.START else Gravity.END) or Gravity.CENTER_VERTICAL
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
         }
 
         panelHostView = createComposeView {
             val expanded by isPanelExpanded.collectAsStateWithLifecycle()
-            val settings by TurboSettingsStore.state.collectAsStateWithLifecycle()
-            val sysStats by liveTelemetry.collectAsStateWithLifecycle()
-            val netStats by NetworkMonitorEngine.telemetry.collectAsStateWithLifecycle()
-            val pulseTick by boostShockwavePulse.collectAsStateWithLifecycle()
-            val boostText by boostFreedReadout.collectAsStateWithLifecycle()
-            val filter by activeVisualFilter.collectAsStateWithLifecycle()
-            val recording by isRecordingScreen.collectAsStateWithLifecycle()
-            val recSecs by recordingSeconds.collectAsStateWithLifecycle()
-            val callEnabled by floatingCallEnabled.collectAsStateWithLifecycle()
-            val smartMic by smartVoiceChatMicOnly.collectAsStateWithLifecycle()
-            val voiceChatActive by isVoiceChatDetected.collectAsStateWithLifecycle()
-
-            val dockAlign = if (settings.edgeOnLeft) Alignment.CenterStart else Alignment.CenterEnd
-            val animMs = if (settings.fastAnimationsEnabled) 150 else 280
+            val rmState by RedMagicEngine.state.collectAsStateWithLifecycle()
+            val hw by RedMagicEngine.hardware.collectAsStateWithLifecycle()
+            val boostMsg by boostReadout.collectAsStateWithLifecycle()
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(Color.Black.copy(alpha = if (expanded) 0.28f else 0f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
-                    ) {
-                        closeCompactDrawer()
-                    },
-                contentAlignment = dockAlign
+                    ) { closeSidePanel() },
+                contentAlignment = Alignment.CenterStart
             ) {
                 AnimatedVisibility(
                     visible = expanded,
-                    enter = slideInHorizontally(
-                        initialOffsetX = { if (settings.edgeOnLeft) -it else it },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = if (settings.fastAnimationsEnabled) Spring.StiffnessMedium else Spring.StiffnessLow
-                        )
-                    ),
-                    exit = slideOutHorizontally(
-                        targetOffsetX = { if (settings.edgeOnLeft) -it else it },
-                        animationSpec = tween(animMs)
-                    )
+                    enter = slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(160)),
+                    exit = slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(140))
                 ) {
                     CompactSwipeUpSidebar(
-                        settings = settings,
-                        sysStats = sysStats,
-                        netStats = netStats,
-                        boostShockwaveTick = pulseTick,
-                        boostReadout = boostText,
-                        activeFilter = filter,
-                        isRecordingScreen = recording,
-                        recordingSeconds = recSecs,
-                        floatingCallEnabled = callEnabled,
-                        smartVoiceChatMicOnly = smartMic,
-                        isVoiceChatDetected = voiceChatActive,
-                        onClose = { closeCompactDrawer() },
-                        onAction = { handleAction(it) }
+                        rmState = rmState,
+                        hw = hw,
+                        boostReadout = boostMsg,
+                        onClose = { closeSidePanel() },
+                        onAction = { handleSidebarAction(it) }
                     )
                 }
             }
         }.apply {
             setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_OUTSIDE) {
-                    closeCompactDrawer()
-                }
+                if (event.action == MotionEvent.ACTION_OUTSIDE) closeSidePanel()
                 false
             }
         }
-
         runCatching { windowManager.addView(panelHostView, params) }
     }
 
-    private fun closeCompactDrawer() {
+    private fun closeSidePanel() {
         if (!isPanelExpanded.value && panelHostView == null) return
-        SoundManager.playPanelClose(applicationContext)
         isPanelExpanded.value = false
-        SystemTelemetryEngine.stopFpsMonitor()
-        val delayMs = if (TurboSettingsStore.state.value.fastAnimationsEnabled) 160L else 290L
+        if (!RedMagicEngine.state.value.showMiniFpsCounter) {
+            SystemTelemetryEngine.stopFpsMonitor()
+        }
         mainHandler.postDelayed({
-            panelHostView?.let {
-                runCatching { windowManager.removeView(it) }
-                panelHostView = null
-            }
-        }, delayMs)
+            destroyComposeView(panelHostView)
+            panelHostView = null
+        }, 150L)
     }
 
-    private fun handleAction(action: MagicSidebarAction) {
+    private fun handleSidebarAction(action: MagicSidebarAction) {
         when (action) {
             MagicSidebarAction.TurboBoostNow -> {
-                boostShockwavePulse.value = boostShockwavePulse.value + 1
-                SoundManager.playTurboBoostBlast(applicationContext)
                 serviceScope.launch {
-                    val res = SystemTelemetryEngine.boostMemory(applicationContext, aggressive = true)
-                    liveTelemetry.value = SystemTelemetryEngine.readTelemetry(applicationContext)
-                    boostFreedReadout.value = if (res.freedMb > 0) "+${res.freedMb} MB" else "${res.processesTrimmed} Clean"
-                    delay(2600L)
-                    boostFreedReadout.value = null
+                    val res = SystemTelemetryEngine.boostMemory(applicationContext, aggressive = false)
+                    RedMagicEngine.refreshHardware(applicationContext)
+                    boostReadout.value = if (res.freedMb > 0) "RAM Freed +${res.freedMb} MB" else "RAM Optimized"
+                    delay(2000L)
+                    boostReadout.value = null
                 }
             }
-            is MagicSidebarAction.SelectVisualFilter -> {
-                activeVisualFilter.value = action.filter
-                mainHandler.post { syncAuxiliaryOverlays() }
-                Toast.makeText(applicationContext, "Filter: ${action.filter.label}", Toast.LENGTH_SHORT).show()
+            MagicSidebarAction.NetworkBoostNow -> {
+                serviceScope.launch {
+                    NetworkMonitorEngine.sampleOnce(applicationContext)
+                    RedMagicEngine.refreshHardware(applicationContext)
+                    boostReadout.value = "Ping Stabilized (${RedMagicEngine.hardware.value.pingMs} ms)"
+                    delay(2000L)
+                    boostReadout.value = null
+                }
+            }
+            MagicSidebarAction.TakeScreenshot -> {
+                closeSidePanel()
+                mainHandler.postDelayed({
+                    if (!GameAccessibilityService.triggerSystemScreenshot()) {
+                        Toast.makeText(this, "Enable Game Magic Accessibility", Toast.LENGTH_SHORT).show()
+                    }
+                }, 200L)
             }
             MagicSidebarAction.ToggleScreenRecording -> {
-                if (isRecordingScreen.value) {
-                    stopRecordingTimer()
-                    Toast.makeText(applicationContext, "Screen Recording Saved", Toast.LENGTH_SHORT).show()
+                if (RedMagicEngine.state.value.isRecording) {
+                    stopRealScreenRecording(showToast = true)
                 } else {
-                    startRecordingTimer()
-                    Toast.makeText(applicationContext, "Game Recording Started", Toast.LENGTH_SHORT).show()
+                    closeSidePanel()
+                    startActivity(Intent(this, ScreenRecordActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
                 }
             }
-            is MagicSidebarAction.ToggleFloatingCall -> {
-                floatingCallEnabled.value = action.enabled
-                Toast.makeText(
-                    applicationContext,
-                    if (action.enabled) "In-Game Call Popup ON" else "In-Game Call Popup OFF",
-                    Toast.LENGTH_SHORT
-                ).show()
+            is MagicSidebarAction.SetPerfMode -> {
+                RedMagicEngine.update(applicationContext) { it.copy(perfMode = action.mode) }
             }
-            is MagicSidebarAction.ToggleSmartVoiceMic -> {
-                smartVoiceChatMicOnly.value = action.enabled
-                syncSmartVoiceChangerState(TurboSettingsStore.state.value)
+            is MagicSidebarAction.ToggleBlockAlerts -> {
+                SystemTelemetryEngine.setDndEnabled(applicationContext, action.enabled)
+                RedMagicEngine.update(applicationContext) { it.copy(blockAlerts = action.enabled) }
             }
-            is MagicSidebarAction.SetPerformanceMode -> {
-                TurboSettingsStore.update { it.copy(performanceMode = action.mode, iceCoolingEnabled = false) }
-                when (action.mode) {
-                    PerformanceMode.BALANCED -> SoundManager.playBalancedMode(applicationContext)
-                    PerformanceMode.HEAVY -> SoundManager.playHeavyMode(applicationContext)
-                    PerformanceMode.ULTRA -> SoundManager.playUltraMode(applicationContext)
-                }
-                if (action.mode != PerformanceMode.BALANCED) {
+            is MagicSidebarAction.ToggleLockControlCenter -> {
+                RedMagicEngine.update(applicationContext) { it.copy(lockControlCenter = action.enabled) }
+            }
+            is MagicSidebarAction.ToggleSmallCallBanner -> {
+                RedMagicEngine.update(applicationContext) { it.copy(smallCallBanner = action.enabled) }
+            }
+            is MagicSidebarAction.ToggleBrightnessLock -> {
+                RedMagicEngine.setBrightnessLock(applicationContext, action.enabled)
+            }
+            is MagicSidebarAction.ToggleAiIsolation -> {
+                RedMagicEngine.update(applicationContext) { it.copy(aiIsolation = action.enabled) }
+                if (action.enabled) {
                     serviceScope.launch {
-                        SystemTelemetryEngine.boostMemory(applicationContext, aggressive = action.mode == PerformanceMode.ULTRA)
+                        SystemTelemetryEngine.boostMemory(applicationContext, aggressive = false)
+                        boostReadout.value = "AI Isolation Active"
+                        delay(1800L)
+                        boostReadout.value = null
                     }
                 }
             }
-            is MagicSidebarAction.ToggleSustainedPerformance -> {
-                TurboSettingsStore.update { it.copy(sustainedPerformanceEnabled = action.enabled) }
+            is MagicSidebarAction.ToggleMiniFpsCounter -> {
+                RedMagicEngine.update(applicationContext) { it.copy(showMiniFpsCounter = action.enabled) }
+                if (action.enabled) SystemTelemetryEngine.startFpsMonitor()
             }
-            is MagicSidebarAction.Toggle24HourClock -> {
-                TurboSettingsStore.update { it.copy(use24HourClock = action.enabled) }
+            is MagicSidebarAction.LaunchFloatingApp -> {
+                closeSidePanel()
+                launchQuickFloatingApp(action.pkg)
             }
             is MagicSidebarAction.ToggleVoiceChanger -> {
                 if (action.enabled) {
-                    val hasMic = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                    if (hasMic) {
-                        TurboSettingsStore.update { it.copy(voiceChangerEnabled = true) }
-                        syncSmartVoiceChangerState(TurboSettingsStore.state.value)
+                    val ok = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                    if (ok) {
+                        VoiceChangerEngine.start(applicationContext, VoicePreset.DEEP_PRO, false)
+                        RedMagicEngine.update(applicationContext) { it.copy(voiceChanger = true) }
                     } else {
-                        Toast.makeText(applicationContext, "Grant Mic permission in Game Magic first", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Grant Mic permission in Game Magic", Toast.LENGTH_SHORT).show()
                     }
                 } else {
                     VoiceChangerEngine.stop()
-                    TurboSettingsStore.update { it.copy(voiceChangerEnabled = false, liveMicMonitorEnabled = false) }
+                    RedMagicEngine.update(applicationContext) { it.copy(voiceChanger = false) }
                 }
             }
-            is MagicSidebarAction.SelectVoicePreset -> {
-                TurboSettingsStore.update { it.copy(voicePreset = action.preset) }
-                VoiceChangerEngine.updatePreset(action.preset)
-                syncSmartVoiceChangerState(TurboSettingsStore.state.value)
+            MagicSidebarAction.CycleFilter -> {
+                val all = RedMagicFilter.entries
+                val next = all[(RedMagicEngine.state.value.filter.ordinal + 1) % all.size]
+                RedMagicEngine.update(applicationContext) { it.copy(filter = next) }
             }
-            is MagicSidebarAction.ToggleLiveMicMonitor -> {
-                if (action.enabled) {
-                    val s = TurboSettingsStore.state.value
-                    val ok = VoiceChangerEngine.start(applicationContext, s.voicePreset, monitorOutput = true)
-                    if (ok) {
-                        TurboSettingsStore.update { it.copy(voiceChangerEnabled = true, liveMicMonitorEnabled = true) }
-                    } else {
-                        Toast.makeText(applicationContext, "Grant Mic permission first", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    VoiceChangerEngine.setMonitorOutput(false)
-                    TurboSettingsStore.update { it.copy(liveMicMonitorEnabled = false) }
-                }
+            is MagicSidebarAction.SetTouchSensitivity -> {
+                RedMagicEngine.update(applicationContext) { it.copy(touchSensitivity = action.value) }
             }
-            is MagicSidebarAction.ToggleCrosshair -> {
-                TurboSettingsStore.update { it.copy(crosshairEnabled = action.enabled) }
-            }
-            MagicSidebarAction.CycleCrosshairStyle -> {
-                val all = CrosshairStyle.entries
-                val next = all[(TurboSettingsStore.state.value.crosshairStyle.ordinal + 1) % all.size]
-                TurboSettingsStore.update { it.copy(crosshairStyle = next) }
-            }
-            is MagicSidebarAction.SetCrosshairColor -> {
-                TurboSettingsStore.update { it.copy(crosshairColorHex = action.hex) }
-            }
-            is MagicSidebarAction.AdjustCrosshairSize -> {
-                TurboSettingsStore.update { it.copy(crosshairSizeDp = (it.crosshairSizeDp + action.delta).coerceIn(14, 38)) }
-            }
-            is MagicSidebarAction.ToggleDnd -> {
-                val ok = SystemTelemetryEngine.setDndEnabled(applicationContext, action.enabled)
-                if (ok) {
-                    TurboSettingsStore.update { it.copy(dndEnabled = action.enabled) }
-                } else {
-                    Toast.makeText(applicationContext, "Allow Do Not Disturb Access first", Toast.LENGTH_SHORT).show()
-                }
-            }
-            is MagicSidebarAction.ToggleTouchGuard -> {
-                TurboSettingsStore.update { it.copy(touchGuardEnabled = action.enabled) }
-            }
-            MagicSidebarAction.TakeScreenshot -> {
-                closeCompactDrawer()
-                mainHandler.postDelayed({
-                    val ok = GameAccessibilityService.triggerSystemScreenshot()
-                    if (!ok) {
-                        Toast.makeText(applicationContext, "Enable Game Magic Accessibility for Screenshot", Toast.LENGTH_SHORT).show()
-                    }
-                }, 260L)
-            }
-            is MagicSidebarAction.ToggleIceCooling -> {
-                val currentTemp = liveTelemetry.value.batteryTempC
-                TurboSettingsStore.update {
-                    it.copy(
-                        iceCoolingEnabled = action.enabled,
-                        coolingBaselineTempC = if (action.enabled) currentTemp else 0f
-                    )
-                }
-                if (action.enabled) {
-                    SoundManager.playIceCooling(applicationContext)
-                }
-            }
-            is MagicSidebarAction.SetOverheatThreshold -> {
-                TurboSettingsStore.update { it.copy(overheatThresholdC = action.tempC) }
-            }
-            is MagicSidebarAction.SetLowBatteryThreshold -> {
-                TurboSettingsStore.update { it.copy(lowBatteryThresholdPct = action.pct) }
-            }
-            is MagicSidebarAction.TogglePingShield -> {
-                TurboSettingsStore.update { it.copy(pingShieldEnabled = action.enabled) }
-            }
-            is MagicSidebarAction.SetPingThreshold -> {
-                TurboSettingsStore.update { it.copy(pingAlertThresholdMs = action.ms) }
-            }
-            is MagicSidebarAction.SetEdgeOnLeft -> {
-                TurboSettingsStore.update { it.copy(edgeOnLeft = action.left) }
-            }
-            is MagicSidebarAction.SetEdgeSize -> {
-                TurboSettingsStore.update { it.copy(edgeSizeScale = action.scale) }
-            }
-            is MagicSidebarAction.SetEdgeOpacity -> {
-                TurboSettingsStore.update { it.copy(edgeOpacity = action.opacity) }
-            }
-            is MagicSidebarAction.ToggleSoundEffects -> {
-                TurboSettingsStore.update { it.copy(soundEffectsEnabled = action.enabled) }
-            }
-            is MagicSidebarAction.ToggleFastAnimations -> {
-                TurboSettingsStore.update { it.copy(fastAnimationsEnabled = action.enabled) }
+            is MagicSidebarAction.SetTouchResponse -> {
+                RedMagicEngine.update(applicationContext) { it.copy(touchResponse = action.value) }
             }
         }
     }
 
-    private fun startRecordingTimer() {
-        isRecordingScreen.value = true
-        recordingSeconds.value = 0
-        recordingTimerJob?.cancel()
-        recordingTimerJob = serviceScope.launch {
-            while (isActive && isRecordingScreen.value) {
-                delay(1000L)
-                recordingSeconds.value += 1
+    private fun launchQuickFloatingApp(targetPkg: String) {
+        val launchIntent = packageManager.getLaunchIntentForPackage(targetPkg)
+        if (launchIntent == null) {
+            Toast.makeText(this, "App not installed", Toast.LENGTH_SHORT).show()
+            return
+        }
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                val opts = ActivityOptions.makeBasic()
+                val dm = resources.displayMetrics
+                val w = (dm.widthPixels * 0.45f).toInt()
+                val h = (dm.heightPixels * 0.55f).toInt()
+                opts.setLaunchBounds(Rect(60, 120, 60 + w, 120 + h))
+                startActivity(launchIntent, opts.toBundle())
+            } else {
+                startActivity(launchIntent)
             }
+        }.onFailure {
+            startActivity(launchIntent)
         }
     }
 
-    private fun stopRecordingTimer() {
-        isRecordingScreen.value = false
-        recordingTimerJob?.cancel()
-        recordingSeconds.value = 0
+    private fun showMiniFpsCounterOverlay() {
+        if (miniCounterView != null) return
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            SAFE_OVERLAY_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 96
+            y = 18
+        }
+        miniCounterView = createComposeView {
+            val hw by RedMagicEngine.hardware.collectAsStateWithLifecycle()
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xCC0B0B0E))
+                    .border(0.8.dp, Color(0xFFFF551A), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("${hw.fps} FPS", color = Color(0xFFFF551A), fontSize = 9.5.sp, fontWeight = FontWeight.Black)
+                Text("${hw.pingMs} ms", color = Color(0xFF00E676), fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        runCatching { windowManager.addView(miniCounterView, params) }
     }
 
-    private fun showOrUpdateVisualFilterOverlay() {
-        if (visualFilterOverlayView != null) return
+    private fun dismissMiniFpsCounterOverlay() {
+        destroyComposeView(miniCounterView)
+        miniCounterView = null
+    }
+
+    private fun showStatusBarShadeBlocker() {
+        if (statusBarBlockerView != null) return
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            68,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            SAFE_OVERLAY_FLAGS,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP }
+
+        statusBarBlockerView = createComposeView {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Transparent))
+        }.apply {
+            setOnTouchListener { _, _ -> true }
+        }
+        runCatching { windowManager.addView(statusBarBlockerView, params) }
+    }
+
+    private fun dismissStatusBarShadeBlocker() {
+        destroyComposeView(statusBarBlockerView)
+        statusBarBlockerView = null
+    }
+
+    private fun showFilterOverlay() {
+        if (filterOverlayView != null) return
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -900,305 +694,110 @@ class GameTurboOverlayService : Service() {
             SAFE_OVERLAY_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT
         )
-
-        visualFilterOverlayView = createComposeView {
-            val filter by activeVisualFilter.collectAsStateWithLifecycle()
-            if (filter != GameVisualFilter.ORIGINAL) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(filter.tintColor.copy(alpha = filter.tintAlpha))
-                )
+        filterOverlayView = createComposeView {
+            val rm by RedMagicEngine.state.collectAsStateWithLifecycle()
+            val baseAlpha = rm.filter.alpha
+            val hdrExtra = if (rm.hdrBoost) 0.03f else 0f
+            val finalAlpha = (baseAlpha + hdrExtra).coerceIn(0f, 0.22f)
+            val tint = if (rm.filter == RedMagicFilter.ORIGINAL && rm.hdrBoost) Color(0xFFFF551A) else Color(rm.filter.colorHex)
+            if (finalAlpha > 0f) {
+                Box(modifier = Modifier.fillMaxSize().background(tint.copy(alpha = finalAlpha)))
             }
         }
-        runCatching { windowManager.addView(visualFilterOverlayView, params) }
+        runCatching { windowManager.addView(filterOverlayView, params) }
     }
 
-    private fun dismissVisualFilterOverlay() {
-        visualFilterOverlayView?.let {
-            runCatching { windowManager.removeView(it) }
-            visualFilterOverlayView = null
-        }
+    private fun dismissFilterOverlay() {
+        destroyComposeView(filterOverlayView)
+        filterOverlayView = null
     }
 
-    private fun showIncomingCallPopup() {
-        if (!Settings.canDrawOverlays(this) || incomingCallBannerView != null) return
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            SAFE_OVERLAY_FLAGS,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = 32
-        }
+    private fun startRealScreenRecording(resultCode: Int, data: Intent) {
+        runCatching {
+            val dm = resources.displayMetrics
+            val width = (dm.widthPixels / 2) * 2
+            val height = (dm.heightPixels / 2) * 2
+            val density = dm.densityDpi
 
-        incomingCallBannerView = createComposeView {
-            val caller by incomingCallNumber.collectAsStateWithLifecycle()
-            if (caller != null) {
-                Surface(
-                    color = ObsidianGreenBg.copy(alpha = 0.96f),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.darkNeonGlow(BalancedCyanGlow, cornerRadius = 14.dp, glowAlpha = 0.5f, strokeWidth = 1.2.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(Icons.Rounded.PhoneInTalk, contentDescription = null, tint = BalancedCyanGlow, modifier = Modifier.size(18.dp))
-                        Column {
-                            Text("IN-GAME CALL", color = BalancedCyanGlow, fontSize = 8.sp, fontWeight = FontWeight.ExtraBold)
-                            Text(caller ?: "Incoming Call", color = MagicTextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .background(EmeraldGlow)
-                                .clickable { answerCallInGame() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Rounded.Call, contentDescription = "Answer", tint = ObsidianGreenBg, modifier = Modifier.size(16.dp))
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .background(UltraCrimsonGlow)
-                                .clickable { rejectCallInGame() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Rounded.CallEnd, contentDescription = "Reject", tint = Color.White, modifier = Modifier.size(16.dp))
-                        }
-                    }
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, "GameTurbo_${System.currentTimeMillis()}.mp4")
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/GameTurbo")
                 }
             }
-        }
-        runCatching { windowManager.addView(incomingCallBannerView, params) }
-    }
+            val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: return
+            val pfd = contentResolver.openFileDescriptor(uri, "w") ?: return
 
-    private fun answerCallInGame() {
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-                ContextCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED
-            ) {
-                val tm = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-                @Suppress("DEPRECATION")
-                tm?.acceptRingingCall()
-                val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                am?.isSpeakerphoneOn = true
-            }
-        }
-        incomingCallNumber.value = null
-        dismissIncomingCallPopup()
-    }
+            @Suppress("DEPRECATION")
+            val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else MediaRecorder()
+            recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE)
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setOutputFile(pfd.fileDescriptor)
+            recorder.setVideoSize(width, height)
+            recorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+            recorder.setVideoEncodingBitRate(6_000_000)
+            recorder.setVideoFrameRate(30)
+            recorder.prepare()
 
-    private fun rejectCallInGame() {
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
-                ContextCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED
-            ) {
-                val tm = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-                @Suppress("DEPRECATION")
-                tm?.endCall()
-            }
-        }
-        incomingCallNumber.value = null
-        dismissIncomingCallPopup()
-    }
+            val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            val proj = mpm.getMediaProjection(resultCode, data)
+            val vd = proj.createVirtualDisplay(
+                "GameTurboRec", width, height, density,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                recorder.surface, null, null
+            )
 
-    private fun dismissIncomingCallPopup() {
-        incomingCallBannerView?.let {
-            runCatching { windowManager.removeView(it) }
-            incomingCallBannerView = null
-        }
-    }
+            recorder.start()
+            mediaProjection = proj
+            mediaRecorder = recorder
+            virtualDisplay = vd
 
-    private fun showCrosshairOverlay() {
-        if (crosshairView != null) return
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            SAFE_OVERLAY_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.CENTER
-        }
-
-        crosshairView = createComposeView {
-            val s by TurboSettingsStore.state.collectAsStateWithLifecycle()
-            val tint = Color(s.crosshairColorHex)
-            val size = s.crosshairSizeDp.dp
-
-            Canvas(modifier = Modifier.size(size)) {
-                val cx = this.size.width / 2f
-                val cy = this.size.height / 2f
-                val stroke = 2.dp.toPx()
-                when (s.crosshairStyle) {
-                    CrosshairStyle.DOT -> {
-                        drawCircle(Color.Black.copy(alpha = 0.7f), radius = 3.8.dp.toPx(), center = Offset(cx, cy))
-                        drawCircle(tint, radius = 2.6.dp.toPx(), center = Offset(cx, cy))
-                    }
-                    CrosshairStyle.PLUS -> {
-                        drawLine(tint, Offset(cx, 0f), Offset(cx, this.size.height), strokeWidth = stroke)
-                        drawLine(tint, Offset(0f, cy), Offset(this.size.width, cy), strokeWidth = stroke)
-                    }
-                    CrosshairStyle.CIRCLE -> {
-                        drawCircle(tint, radius = (this.size.minDimension / 2f) - stroke, style = Stroke(stroke))
-                        drawCircle(tint, radius = 1.8.dp.toPx(), center = Offset(cx, cy))
-                    }
-                    CrosshairStyle.TACTICAL -> {
-                        val gap = 4.dp.toPx()
-                        drawLine(tint, Offset(cx, 0f), Offset(cx, cy - gap), strokeWidth = stroke)
-                        drawLine(tint, Offset(cx, cy + gap), Offset(cx, this.size.height), strokeWidth = stroke)
-                        drawLine(tint, Offset(0f, cy), Offset(cx - gap, cy), strokeWidth = stroke)
-                        drawLine(tint, Offset(cx + gap, cy), Offset(this.size.width, cy), strokeWidth = stroke)
-                        drawCircle(tint, radius = 1.7.dp.toPx(), center = Offset(cx, cy))
-                    }
+            RedMagicEngine.update(applicationContext) { it.copy(isRecording = true, recordingSeconds = 0) }
+            recordTimerJob?.cancel()
+            recordTimerJob = serviceScope.launch {
+                while (isActive && RedMagicEngine.state.value.isRecording) {
+                    delay(1000L)
+                    RedMagicEngine.update(applicationContext) { it.copy(recordingSeconds = it.recordingSeconds + 1) }
                 }
             }
-        }
-        runCatching { windowManager.addView(crosshairView, params) }
-    }
-
-    private fun dismissCrosshairOverlay() {
-        crosshairView?.let {
-            runCatching { windowManager.removeView(it) }
-            crosshairView = null
+            Toast.makeText(this, "Recording Started", Toast.LENGTH_SHORT).show()
+        }.onFailure {
+            Toast.makeText(this, "Screen recording failed", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun showTouchGuardOverlays() {
-        if (touchGuardTopView != null) return
-        val topParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            42,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            SAFE_OVERLAY_FLAGS,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP }
-
-        val bottomParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            26,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            SAFE_OVERLAY_FLAGS,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.BOTTOM }
-
-        val leftParams = WindowManager.LayoutParams(
-            26,
-            180,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            SAFE_OVERLAY_FLAGS,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.START or Gravity.BOTTOM }
-
-        val rightParams = WindowManager.LayoutParams(
-            26,
-            180,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            SAFE_OVERLAY_FLAGS,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.END or Gravity.BOTTOM }
-
-        touchGuardTopView = createComposeView { Box(Modifier.fillMaxSize().background(Color.Transparent)) }
-        touchGuardBottomView = createComposeView { Box(Modifier.fillMaxSize().background(Color.Transparent)) }
-        touchGuardLeftView = createComposeView { Box(Modifier.fillMaxSize().background(Color.Transparent)) }
-        touchGuardRightView = createComposeView { Box(Modifier.fillMaxSize().background(Color.Transparent)) }
-
-        runCatching {
-            windowManager.addView(touchGuardTopView, topParams)
-            windowManager.addView(touchGuardBottomView, bottomParams)
-            windowManager.addView(touchGuardLeftView, leftParams)
-            windowManager.addView(touchGuardRightView, rightParams)
-        }
+    private fun stopRealScreenRecording(showToast: Boolean) {
+        recordTimerJob?.cancel()
+        runCatching { mediaRecorder?.stop() }
+        runCatching { mediaRecorder?.reset() }
+        runCatching { mediaRecorder?.release() }
+        runCatching { virtualDisplay?.release() }
+        runCatching { mediaProjection?.stop() }
+        mediaRecorder = null
+        virtualDisplay = null
+        mediaProjection = null
+        RedMagicEngine.update(applicationContext) { it.copy(isRecording = false, recordingSeconds = 0) }
+        if (showToast) Toast.makeText(this, "Saved to Movies/GameTurbo", Toast.LENGTH_SHORT).show()
     }
 
-    private fun dismissTouchGuardOverlays() {
-        listOf(touchGuardTopView, touchGuardBottomView, touchGuardLeftView, touchGuardRightView).forEach { v ->
-            v?.let { runCatching { windowManager.removeView(it) } }
-        }
-        touchGuardTopView = null
-        touchGuardBottomView = null
-        touchGuardLeftView = null
-        touchGuardRightView = null
-    }
-
-    private fun showTopEdgeAlertBanner() {
-        if (!Settings.canDrawOverlays(this) || alertBannerView != null) return
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            SAFE_OVERLAY_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = 26
-        }
-
-        alertBannerView = createComposeView {
-            val alert by liveAlertBanner.collectAsStateWithLifecycle()
-            AnimatedVisibility(visible = alert != null, enter = fadeIn(), exit = fadeOut()) {
-                alert?.let { (message, accent) ->
-                    Surface(
-                        color = ObsidianGreenBg.copy(alpha = 0.92f),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.darkNeonGlow(accent, cornerRadius = 10.dp, glowAlpha = 0.34f, strokeWidth = 0.85.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            Icon(Icons.Rounded.WarningAmber, contentDescription = null, tint = accent, modifier = Modifier.size(13.dp))
-                            Text(message, color = MagicTextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-        runCatching { windowManager.addView(alertBannerView, params) }
-    }
-
-    private fun dismissTopEdgeAlertBanner() {
-        alertBannerView?.let {
-            runCatching { windowManager.removeView(it) }
-            alertBannerView = null
-        }
-    }
-
-    private fun hideAllGameOverlays() {
-        closeCompactDrawer()
-        edgeTriggerView?.let {
-            runCatching { windowManager.removeView(it) }
-            edgeTriggerView = null
-        }
-        dismissVisualFilterOverlay()
-        dismissCrosshairOverlay()
-        dismissTouchGuardOverlays()
-        dismissTopEdgeAlertBanner()
-        dismissIncomingCallPopup()
+    private fun hideAllOverlays() {
+        closeSidePanel()
+        destroyComposeView(edgeTriggerView)
+        edgeTriggerView = null
+        dismissFilterOverlay()
+        dismissStatusBarShadeBlocker()
+        dismissMiniFpsCounterOverlay()
     }
 
     override fun onDestroy() {
         isRunning = false
+        monitorJob?.cancel()
         telemetryJob?.cancel()
-        fallbackMonitorJob?.cancel()
-        settingsWatchJob?.cancel()
-        recordingTimerJob?.cancel()
+        settingsJob?.cancel()
+        stopRealScreenRecording(showToast = false)
         serviceScope.cancel()
-        if (callReceiverRegistered) {
-            runCatching { unregisterReceiver(phoneStateReceiver) }
-            callReceiverRegistered = false
-        }
-        VoiceChangerEngine.stop()
-        SystemTelemetryEngine.stopFpsMonitor()
-        mainHandler.post { hideAllGameOverlays() }
+        mainHandler.post { hideAllOverlays() }
         super.onDestroy()
     }
 }
