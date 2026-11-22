@@ -349,7 +349,7 @@ class GameTurboOverlayService : Service() {
         owner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
         return ComposeView(this).apply {
-            setTag(R.id.service_notification_title, Pair(owner, vmOwner))
+            tag = Pair(owner, vmOwner)
             setViewTreeLifecycleOwner(owner)
             setViewTreeViewModelStoreOwner(vmOwner)
             setViewTreeSavedStateRegistryOwner(owner)
@@ -361,11 +361,11 @@ class GameTurboOverlayService : Service() {
         view ?: return
         runCatching {
             @Suppress("UNCHECKED_CAST")
-            val tag = view.getTag(R.id.service_notification_title) as? Pair<MyLifecycleOwner, MyViewModelStoreOwner>
-            tag?.first?.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-            tag?.first?.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-            tag?.first?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-            tag?.second?.clear()
+            val owners = view.tag as? Pair<MyLifecycleOwner, MyViewModelStoreOwner>
+            owners?.first?.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+            owners?.first?.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+            owners?.first?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            owners?.second?.clear()
         }
         runCatching { windowManager.removeView(view) }
     }
