@@ -363,7 +363,7 @@ class GameTurboOverlayService : Service() {
         fallbackMonitorJob = serviceScope.launch {
             val usm = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             while (isActive) {
-                delay(800L)
+                delay(650L)
                 val selected = TurboSettingsStore.state.value.selectedPackages
                     .filterNot { isLauncherOrSystemPackage(it) }
                     .toSet()
@@ -375,10 +375,13 @@ class GameTurboOverlayService : Service() {
                     continue
                 }
 
-                val a11yPkg = GameAccessibilityService.instance?.rootInActiveWindow?.packageName?.toString()
-                if (a11yPkg != null && a11yPkg != packageName && a11yPkg != "com.android.systemui") {
-                    val isGame = !isLauncherOrSystemPackage(a11yPkg) && selected.contains(a11yPkg)
-                    handleForegroundUpdate(a11yPkg, isGame)
+                val a11yService = GameAccessibilityService.instance
+                if (a11yService != null) {
+                    val a11yPkg = a11yService.rootInActiveWindow?.packageName?.toString()
+                    if (a11yPkg == null || (!a11yPkg.contains("inputmethod") && !a11yPkg.contains("keyboard"))) {
+                        val isGame = a11yPkg != null && !isLauncherOrSystemPackage(a11yPkg) && selected.contains(a11yPkg)
+                        handleForegroundUpdate(a11yPkg, isGame)
+                    }
                     continue
                 }
 
@@ -408,7 +411,7 @@ class GameTurboOverlayService : Service() {
                     }
                 }
 
-                if (latestForegroundPkg != null && latestForegroundPkg != packageName) {
+                if (latestForegroundPkg != null) {
                     val isGame = !isLauncherOrSystemPackage(latestForegroundPkg) && selected.contains(latestForegroundPkg)
                     handleForegroundUpdate(latestForegroundPkg, isGame)
                 } else if (activeGamePaused && activeGamePackage != null) {
