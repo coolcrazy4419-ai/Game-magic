@@ -375,47 +375,52 @@ class GameTurboOverlayService : Service() {
                     continue
                 }
 
-                val a11yService = GameAccessibilityService.instance
-                if (a11yService != null) {
-                    val a11yPkg = a11yService.rootInActiveWindow?.packageName?.toString()
-                    if (a11yPkg == null || (!a11yPkg.contains("inputmethod") && !a11yPkg.contains("keyboard"))) {
-                        val isGame = a11yPkg != null && !isLauncherOrSystemPackage(a11yPkg) && selected.contains(a11yPkg)
-                        handleForegroundUpdate(a11yPkg, isGame)
-                    }
-                    continue
+                var detectedPkg: String? = null
+
+                // 1. Check Accessibility window if non-null
+                val a11yPkg = GameAccessibilityService.instance?.rootInActiveWindow?.packageName?.toString()
+                if (a11yPkg != null && !a11yPkg.contains("inputmethod") && !a11yPkg.contains("keyboard")) {
+                    detectedPkg = a11yPkg
                 }
 
-                if (usm == null) continue
-                val end = System.currentTimeMillis()
-                val events = usm.queryEvents(end - 5000L, end)
-                val event = UsageEvents.Event()
-                var latestForegroundPkg: String? = null
-                var activeGamePaused = false
+                // 2. Also check UsageStatsManager (essential for full-screen games on HyperOS)
+                if (usm != null && (detectedPkg == null || detectedPkg == "com.android.systemui")) {
+                    val end = System.currentTimeMillis()
+                    val events = usm.queryEvents(end - 6000L, end)
+                    val event = UsageEvents.Event()
+                    var latestForegroundPkg: String? = null
+                    var activeGamePaused = false
 
-                while (events.hasNextEvent()) {
-                    events.getNextEvent(event)
-                    when (event.eventType) {
-                        UsageEvents.Event.MOVE_TO_FOREGROUND,
-                        UsageEvents.Event.ACTIVITY_RESUMED -> {
-                            latestForegroundPkg = event.packageName
-                            if (event.packageName == activeGamePackage) {
-                                activeGamePaused = false
+                    while (events.hasNextEvent()) {
+                        events.getNextEvent(event)
+                        when (event.eventType) {
+                            UsageEvents.Event.MOVE_TO_FOREGROUND,
+                            UsageEvents.Event.ACTIVITY_RESUMED -> {
+                                latestForegroundPkg = event.packageName
+                                if (event.packageName == activeGamePackage) {
+                                    activeGamePaused = false
+                                }
                             }
-                        }
-                        UsageEvents.Event.MOVE_TO_BACKGROUND,
-                        UsageEvents.Event.ACTIVITY_PAUSED -> {
-                            if (event.packageName == activeGamePackage) {
-                                activeGamePaused = true
+                            UsageEvents.Event.MOVE_TO_BACKGROUND,
+                            UsageEvents.Event.ACTIVITY_PAUSED -> {
+                                if (event.packageName == activeGamePackage) {
+                                    activeGamePaused = true
+                                }
                             }
                         }
                     }
+
+                    if (latestForegroundPkg != null) {
+                        detectedPkg = latestForegroundPkg
+                    } else if (activeGamePaused && activeGamePackage != null) {
+                        handleForegroundUpdate(null, false)
+                        continue
+                    }
                 }
 
-                if (latestForegroundPkg != null) {
-                    val isGame = !isLauncherOrSystemPackage(latestForegroundPkg) && selected.contains(latestForegroundPkg)
-                    handleForegroundUpdate(latestForegroundPkg, isGame)
-                } else if (activeGamePaused && activeGamePackage != null) {
-                    handleForegroundUpdate(null, false)
+                if (detectedPkg != null) {
+                    val isGame = !isLauncherOrSystemPackage(detectedPkg) && selected.contains(detectedPkg)
+                    handleForegroundUpdate(detectedPkg, isGame)
                 }
             }
         }
