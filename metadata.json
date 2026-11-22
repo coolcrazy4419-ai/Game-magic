@@ -1,0 +1,6 @@
+{
+  "name": "Game Magic",
+  "description": "Zero-lag, 100% anti-cheat-safe native Android gaming suite with an ultra-compact swipe-up floating sidebar, real-time DSP voice changer, pro crosshair, thermal ice-cooling, and early network drop alerts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
