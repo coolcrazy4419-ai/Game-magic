@@ -70,7 +70,6 @@ fun CompactSwipeUpSidebar(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Header + Close
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -101,7 +100,6 @@ fun CompactSwipeUpSidebar(
             }
         }
 
-        // Live Telemetry Bar (FPS, Ping, CPU, GPU)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -130,7 +128,6 @@ fun CompactSwipeUpSidebar(
             }
         }
 
-        // Performance Modes
         Text("PERFORMANCE MODE", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -159,7 +156,6 @@ fun CompactSwipeUpSidebar(
             }
         }
 
-        // Quick Toggles Grid (All Features Inside Slide Panel)
         Text("PRO GAMING TOOLS", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -258,7 +254,6 @@ fun CompactSwipeUpSidebar(
             ) { onAction(MagicSidebarAction.ToggleMiniFpsCounter(!rmState.showMiniFpsCounter)) }
         }
 
-        // Quick Floating Apps
         Text("QUICK FLOATING APPS", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             QuickAppChip(Modifier.weight(1f), "WhatsApp") {
@@ -272,7 +267,6 @@ fun CompactSwipeUpSidebar(
             }
         }
 
-        // Touch Sliders
         Column(
             modifier = Modifier
                 .fillMaxWidth()
