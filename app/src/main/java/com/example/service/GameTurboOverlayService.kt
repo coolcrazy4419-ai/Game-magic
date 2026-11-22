@@ -125,7 +125,6 @@ class GameTurboOverlayService : Service() {
         super.onCreate()
         TurboSettingsStore.init(applicationContext)
         RedMagicEngine.init(applicationContext)
-        NetworkMonitorEngine.registerCallback(applicationContext)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
         createNotificationChannel()
@@ -233,7 +232,6 @@ class GameTurboOverlayService : Service() {
         mainHandler.post { hideAllOverlays() }
     }
 
-    // Ultra-lightweight telemetry loop: zero CPU overhead while playing
     private fun startTelemetryLoop() {
         telemetryJob = serviceScope.launch {
             while (isActive) {
@@ -246,7 +244,6 @@ class GameTurboOverlayService : Service() {
                 val rm = RedMagicEngine.state.value
                 if (isPanelExpanded.value || rm.showMiniFpsCounter) {
                     RedMagicEngine.refreshHardware(applicationContext)
-                    NetworkMonitorEngine.sampleOnce(applicationContext)
                 }
                 delay(3000L)
             }
@@ -516,7 +513,6 @@ class GameTurboOverlayService : Service() {
             }
             MagicSidebarAction.NetworkBoostNow -> {
                 serviceScope.launch {
-                    NetworkMonitorEngine.sampleOnce(applicationContext)
                     RedMagicEngine.refreshHardware(applicationContext)
                     boostReadout.value = "Ping Stabilized (${RedMagicEngine.hardware.value.pingMs} ms)"
                     delay(2000L)
