@@ -22,10 +22,6 @@ data class PermissionStatus(
         get() = overlayGranted && accessibilityGranted && dndGranted && micGranted
 }
 
-/**
- * Clean, lightweight ViewModel for Game Magic Home Screen & App Picker.
- * All in-game toggles and telemetry live strictly inside the compact floating sidebar.
- */
 class TurboViewModel(application: Application) : AndroidViewModel(application) {
 
     private val ctx = application.applicationContext
@@ -38,9 +34,6 @@ class TurboViewModel(application: Application) : AndroidViewModel(application) {
     private val _appsLoading = MutableStateFlow(true)
     val appsLoading: StateFlow<Boolean> = _appsLoading.asStateFlow()
 
-    /**
-     * Strictly contains ONLY the games and apps explicitly added by the user.
-     */
     val addedApps: StateFlow<List<InstalledAppInfo>> = combine(_installedApps, settings) { all, s ->
         all.filter { s.selectedPackages.contains(it.packageName) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -65,6 +58,14 @@ class TurboViewModel(application: Application) : AndroidViewModel(application) {
             dndGranted = SystemTelemetryEngine.hasDndAccess(ctx),
             micGranted = VoiceChangerEngine.hasMicPermission(ctx)
         )
+        if (GameTurboOverlayService.isRunning) {
+            val hideIntent = Intent(ctx, GameTurboOverlayService::class.java).apply {
+                action = GameTurboOverlayService.ACTION_FOREGROUND_CHANGED
+                putExtra(GameTurboOverlayService.EXTRA_PACKAGE_NAME, ctx.packageName)
+                putExtra(GameTurboOverlayService.EXTRA_IS_GAME_ACTIVE, false)
+            }
+            runCatching { ctx.startService(hideIntent) }
+        }
         if (_permissions.value.overlayGranted && settings.value.selectedPackages.isNotEmpty()) {
             ensureOverlayServiceArmed()
         }
@@ -118,27 +119,8 @@ class TurboViewModel(application: Application) : AndroidViewModel(application) {
         SoundManager.playEpicLaunchPortal(ctx)
     }
 
-    /**
-     * Called right after the 900ms Cyber-Magic Launch Animation completes.
-     * Arms the compact floating edge trigger and launches the target game package cleanly.
-     */
     fun launchGameNow(app: InstalledAppInfo) {
         ensureOverlayServiceArmed()
-        if (Settings.canDrawOverlays(ctx)) {
-            val notifyIntent = Intent(ctx, GameTurboOverlayService::class.java).apply {
-                action = GameTurboOverlayService.ACTION_FOREGROUND_CHANGED
-                putExtra(GameTurboOverlayService.EXTRA_PACKAGE_NAME, app.packageName)
-                putExtra(GameTurboOverlayService.EXTRA_IS_GAME_ACTIVE, true)
-            }
-            runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    ctx.startForegroundService(notifyIntent)
-                } else {
-                    ctx.startService(notifyIntent)
-                }
-            }
-        }
-
         val launchIntent = ctx.packageManager.getLaunchIntentForPackage(app.packageName)
         if (launchIntent != null) {
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
