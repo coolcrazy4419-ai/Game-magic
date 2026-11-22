@@ -1,528 +1,590 @@
 package com.example.ui
 
-import android.Manifest
 import android.content.Intent
-import android.net.Uri
 import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.core.InstalledAppInfo
-import com.example.ui.components.CyberMagicLaunchOverlay
-import com.example.ui.components.EmeraldHexGridBackground
-import com.example.ui.components.SplashIntroOverlay
-import com.example.ui.components.darkNeonGlow
-import com.example.ui.screens.AppPickerScreen
-import com.example.ui.theme.*
-import com.example.ui.viewmodel.PermissionStatus
+import com.example.core.*
 import com.example.ui.viewmodel.TurboViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-/**
- * Ultra-Clean Game Magic Home Screen:
- * Displays ONLY the user's added Games & Apps grid, a minimal "+ Add" button,
- * and a compact Permission Setup card (hidden automatically once required permissions are granted).
- * Zero performance toggles, telemetry, or customisation clutter on Home — all tools live in the
- * ultra-compact in-game slide-out sidebar.
- */
+private val BgBlack = Color(0xFF070709)
+private val CardDark = Color(0xFF101015)
+private val BorderOrange = Color(0xFFFF551A)
+private val BorderCrimson = Color(0xFFFF2A3C)
+private val TextWhite = Color(0xFFF5F5F7)
+private val TextGray = Color(0xFF9494A3)
+
 @Composable
-fun MainScreen(viewModel: TurboViewModel = viewModel()) {
-    val context = LocalContext.current
+fun MainScreen(viewModel: TurboViewModel) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val addedApps by viewModel.addedApps.collectAsStateWithLifecycle()
-    val appsLoading by viewModel.appsLoading.collectAsStateWithLifecycle()
+    val allApps by viewModel.installedApps.collectAsStateWithLifecycle()
     val perms by viewModel.permissions.collectAsStateWithLifecycle()
-    val bannerText by viewModel.statusBanner.collectAsStateWithLifecycle()
+    val banner by viewModel.statusBanner.collectAsStateWithLifecycle()
 
-    var showSplash by rememberSaveable { mutableStateOf(true) }
-    var showAppPicker by remember { mutableStateOf(false) }
-    var launchingApp by remember { mutableStateOf<InstalledAppInfo?>(null) }
-
-    val micPermLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) {
-        viewModel.refreshPermissions()
+    LaunchedEffect(Unit) {
+        RedMagicEngine.init(ctx)
+        delay(250L) // Instant 0ms UI render first, then sample hardware
+        while (true) {
+            RedMagicEngine.refreshHardware(ctx)
+            delay(3500L)
+        }
     }
 
-    EmeraldHexGridBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            contentWindowInsets = WindowInsets.safeDrawing
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                if (showAppPicker) {
-                    AppPickerScreen(
-                        viewModel = viewModel,
-                        onBack = { showAppPicker = false }
+    val rm by RedMagicEngine.state.collectAsStateWithLifecycle()
+    val hw by RedMagicEngine.hardware.collectAsStateWithLifecycle()
+    var showAppPicker by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize().background(BgBlack)) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(top = 10.dp, bottom = 28.dp)
+        ) {
+            // 1. Top Bar
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "GAME TURBO",
+                        color = BorderOrange,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.2.sp
                     )
-                } else {
-                    Column(
+                    Row(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(CardDark)
+                            .border(1.dp, BorderOrange.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Minimal Brand Header + "+ Add" Button
+                        Text("${"%.0f".format(hw.tempC)}°C", color = BorderOrange, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("${hw.batteryPct}%", color = Color(0xFF00E676), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            if (!perms.overlayGranted || !perms.accessibilityGranted) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x26FF2A3C))
+                            .border(1.dp, BorderCrimson, RoundedCornerShape(12.dp))
+                            .clickable {
+                                if (!perms.overlayGranted) {
+                                    ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+                                } else {
+                                    ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                }
+                            }
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = if (!perms.overlayGranted) "Tap to allow Display Over Apps" else "Tap to enable Game Magic Accessibility",
+                            color = TextWhite,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Icon(Icons.Rounded.ArrowForward, contentDescription = null, tint = BorderCrimson, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+
+            // 2. Device Specs + Glowing TURBO LAUNCH Ring
+            item {
+                RmSectionCard {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(hw.deviceName, color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(hw.androidVersion, color = TextGray, fontSize = 11.sp)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SpecCell("Chipset", hw.chipset, Modifier.weight(1f))
+                        SpecCell("RAM", "${hw.totalRamGb} GB", Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SpecCell("Storage", "${hw.totalStorageGb} GB", Modifier.weight(1f))
+                        SpecCell("Display", "${hw.refreshRateHz} Hz", Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = Modifier
+                                .size(116.dp)
+                                .clip(CircleShape)
+                                .background(Brush.radialGradient(listOf(BorderOrange.copy(alpha = 0.28f), CardDark)))
+                                .border(2.5.dp, BorderOrange, CircleShape)
+                                .clickable {
+                                    scope.launch {
+                                        SystemTelemetryEngine.boostMemory(ctx, aggressive = false)
+                                        RedMagicEngine.refreshHardware(ctx)
+                                        viewModel.showTransientMessage("Turbo Boosted • ${addedApps.firstOrNull()?.name ?: "Ready"}")
+                                        addedApps.firstOrNull()?.let { viewModel.launchGameNow(it) }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("TURBO", color = TextWhite, fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                                Text("LAUNCH", color = BorderOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Performance Mode
+            item {
+                RmSectionTitle("Performance mode")
+                RmSectionCard {
+                    val modes = RedMagicPerfMode.entries
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PerfModeChip(modes[0], rm.perfMode == modes[0], Modifier.weight(1f)) {
+                                RedMagicEngine.update(ctx) { it.copy(perfMode = modes[0]) }
+                            }
+                            PerfModeChip(modes[1], rm.perfMode == modes[1], Modifier.weight(1f)) {
+                                RedMagicEngine.update(ctx) { it.copy(perfMode = modes[1]) }
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PerfModeChip(modes[2], rm.perfMode == modes[2], Modifier.weight(1f)) {
+                                RedMagicEngine.update(ctx) { it.copy(perfMode = modes[2]) }
+                            }
+                            PerfModeChip(modes[3], rm.perfMode == modes[3], Modifier.weight(1f), isCrimson = true) {
+                                RedMagicEngine.update(ctx) { it.copy(perfMode = modes[3]) }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Live Stats
+            item {
+                RmSectionTitle("Live stats")
+                RmSectionCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LiveStatBox("FPS", "${hw.fps}", (hw.fps / 120f).coerceIn(0.2f, 1f), BorderOrange, Modifier.weight(1f))
+                            LiveStatBox("Ping", "${hw.pingMs} ms", (1f - hw.pingMs / 150f).coerceIn(0.2f, 1f), Color(0xFF00E676), Modifier.weight(1f))
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LiveStatBox("CPU", "${hw.cpuPercent}%", hw.cpuPercent / 100f, BorderOrange, Modifier.weight(1f))
+                            LiveStatBox("GPU", "${hw.gpuPercent}%", hw.gpuPercent / 100f, BorderOrange, Modifier.weight(1f))
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LiveStatBox("RAM", "${"%.1f".format(hw.ramUsedGb)} GB", (hw.ramUsedGb / hw.totalRamGb).coerceIn(0.1f, 1f), BorderOrange, Modifier.weight(1f))
+                            LiveStatBox("Temp", "${"%.0f".format(hw.tempC)}°C", (hw.tempC / 50f).coerceIn(0.2f, 1f), if (hw.tempC >= 41f) BorderCrimson else BorderOrange, Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+
+            // 5. Boost Tools
+            item {
+                RmSectionTitle("Boost tools")
+                RmSectionCard {
+                    val tools = listOf("Clean CPU", "Clean GPU", "Clean RAM", "Network boost", "Close background", "Cool down")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        tools.chunked(3).forEach { rowTools ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                rowTools.forEach { label ->
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(9.dp))
+                                            .background(BgBlack)
+                                            .border(0.9.dp, BorderOrange.copy(alpha = 0.7f), RoundedCornerShape(9.dp))
+                                            .clickable {
+                                                scope.launch {
+                                                    val res = SystemTelemetryEngine.boostMemory(ctx, aggressive = false)
+                                                    RedMagicEngine.refreshHardware(ctx)
+                                                    viewModel.showTransientMessage("$label Done (+${res.freedMb} MB)")
+                                                }
+                                            }
+                                            .padding(vertical = 9.dp, horizontal = 4.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(label, color = TextWhite, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 6. Pro Gaming Filters (6 Best Filters + Sliders + HDR Boost)
+            item {
+                RmSectionTitle("Pro gaming filters")
+                RmSectionCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        RedMagicFilter.entries.chunked(3).forEach { rowFilters ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                rowFilters.forEach { f ->
+                                    val sel = rm.filter == f
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (sel) BorderOrange.copy(alpha = 0.25f) else BgBlack)
+                                            .border(if (sel) 1.dp else 0.6.dp, if (sel) BorderOrange else TextGray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                            .clickable { RedMagicEngine.update(ctx) { it.copy(filter = f) } }
+                                            .padding(vertical = 7.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(f.label, color = if (sel) TextWhite else TextGray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                        RmSliderRow("Sharpness", rm.sharpness) { v -> RedMagicEngine.update(ctx) { it.copy(sharpness = v) } }
+                        RmSliderRow("Contrast", rm.contrast) { v -> RedMagicEngine.update(ctx) { it.copy(contrast = v) } }
+                        RmSliderRow("Saturation", rm.saturation) { v -> RedMagicEngine.update(ctx) { it.copy(saturation = v) } }
+                        RmSwitchRow("HDR Boost", rm.hdrBoost) { v -> RedMagicEngine.update(ctx) { it.copy(hdrBoost = v) } }
+                    }
+                }
+            }
+
+            // 7. Graphics
+            item {
+                RmSectionTitle("Graphics")
+                RmSectionCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(60, 90, 120, 144).forEach { fps ->
+                                val label = if (fps == 144) "Max" else "$fps"
+                                val sel = rm.targetFps == fps
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (sel) BorderOrange.copy(alpha = 0.25f) else BgBlack)
+                                        .border(1.dp, if (sel) BorderOrange else TextGray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                        .clickable { RedMagicEngine.update(ctx) { it.copy(targetFps = fps) } }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(label, color = if (sel) TextWhite else TextGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("Auto", "HD", "FHD", "Ultra").forEach { res ->
+                                val sel = rm.resolutionLabel == res
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (sel) BorderOrange.copy(alpha = 0.25f) else BgBlack)
+                                        .border(1.dp, if (sel) BorderOrange else TextGray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                        .clickable { RedMagicEngine.update(ctx) { it.copy(resolutionLabel = res) } }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(res, color = if (sel) TextWhite else TextGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        RmSwitchRow("Shadows", rm.shadowsEnabled) { v -> RedMagicEngine.update(ctx) { it.copy(shadowsEnabled = v) } }
+                        RmSwitchRow("Anti-aliasing", rm.antiAliasing) { v -> RedMagicEngine.update(ctx) { it.copy(antiAliasing = v) } }
+                        RmSwitchRow("Smooth touch", rm.smoothTouch) { v -> RedMagicEngine.update(ctx) { it.copy(smoothTouch = v) } }
+                    }
+                }
+            }
+
+            // 8. Sound & Voice
+            item {
+                RmSectionTitle("Sound and voice")
+                RmSectionCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            RedMagicSoundMode.entries.forEach { sm ->
+                                val sel = rm.soundMode == sm
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (sel) BorderOrange.copy(alpha = 0.25f) else BgBlack)
+                                        .border(1.dp, if (sel) BorderOrange else TextGray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                        .clickable { RedMagicEngine.update(ctx) { it.copy(soundMode = sm) } }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(sm.label, color = if (sel) TextWhite else TextGray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        RmSwitchRow("Voice changer", rm.voiceChanger) { v -> RedMagicEngine.update(ctx) { it.copy(voiceChanger = v) } }
+                        RmSwitchRow("Mic mute", rm.micMute) { v -> RedMagicEngine.update(ctx) { it.copy(micMute = v) } }
+                    }
+                }
+            }
+
+            // 9. My Games + Per-Game Profile
+            item {
+                RmSectionTitle("My games")
+                RmSectionCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            addedApps.take(3).forEach { game ->
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(9.dp))
+                                        .background(BgBlack)
+                                        .border(0.9.dp, BorderOrange.copy(alpha = 0.65f), RoundedCornerShape(9.dp))
+                                        .clickable { viewModel.launchGameNow(game) }
+                                        .padding(8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(game.name, color = TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(RedMagicEngine.getPlaytimeHoursText(ctx, game.packageName), color = BorderOrange, fontSize = 9.sp)
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .width(64.dp)
+                                    .clip(RoundedCornerShape(9.dp))
+                                    .background(BorderOrange.copy(alpha = 0.16f))
+                                    .border(1.dp, BorderOrange, RoundedCornerShape(9.dp))
+                                    .clickable { showAppPicker = true }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("+ Add", color = BorderOrange, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                            }
+                        }
+                        RmSwitchRow("Profile per game", rm.profilePerGame) { v -> RedMagicEngine.update(ctx) { it.copy(profilePerGame = v) } }
+                    }
+                }
+            }
+
+            // 10. Alerts
+            item {
+                RmSectionTitle("Alerts")
+                RmSectionCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = if (hw.batteryPct <= 20) "Battery low (${hw.batteryPct}%). Plug in charger." else "Thermal & Battery Guard Active (${"%.1f".format(hw.tempC)}°C)",
+                            color = BorderOrange,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(BgBlack)
+                                .border(0.8.dp, BorderOrange.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(RoundedCornerShape(11.dp))
-                                        .background(
-                                            Brush.linearGradient(listOf(ObsidianCard, HeavyFillDark))
-                                        )
-                                        .darkNeonGlow(EmeraldGlow, cornerRadius = 11.dp, glowAlpha = 0.34f, strokeWidth = 0.9.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.AutoAwesome,
-                                        contentDescription = "Game Magic",
-                                        tint = EmeraldGlow,
-                                        modifier = Modifier.size(21.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = "GAME MAGIC",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        color = MagicTextPrimary,
-                                        letterSpacing = 1.4.sp
-                                    )
-                                    Text(
-                                        text = if (addedApps.isEmpty()) "Add games to arm magic sidebar" else "${addedApps.size} Armed • Tap to launch",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MagicTextSecondary
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                color = EmeraldDeepGlow.copy(alpha = 0.22f),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .height(42.dp)
-                                    .darkNeonGlow(EmeraldGlow, cornerRadius = 12.dp, glowAlpha = 0.30f, strokeWidth = 0.9.dp)
-                                    .testTag("home_add_button")
-                                    .clickable { showAppPicker = true }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Icon(Icons.Rounded.Add, contentDescription = "Add Apps", tint = EmeraldWireframe, modifier = Modifier.size(18.dp))
-                                    Text(
-                                        text = "Add",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MagicTextPrimary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        // Compact Permission Setup Card — strictly hidden once required permissions are granted
-                        AnimatedVisibility(visible = !perms.allCoreGranted) {
-                            CompactPermissionSetupCard(
-                                perms = perms,
-                                onAllowOverlay = {
-                                    runCatching {
-                                        context.startActivity(
-                                            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
-                                        )
+                            Text("Ping test with live stats", color = TextGray, fontSize = 11.sp)
+                            Text(
+                                text = "Connected (${hw.pingMs} ms)",
+                                color = Color(0xFF00E676),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable {
+                                    scope.launch {
+                                        NetworkMonitorEngine.sampleOnce(ctx)
+                                        RedMagicEngine.refreshHardware(ctx)
                                     }
-                                },
-                                onAllowAccessibility = {
-                                    runCatching { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-                                },
-                                onAllowDnd = {
-                                    runCatching { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }
-                                },
-                                onAllowMic = {
-                                    micPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                 }
                             )
                         }
-
-                        // Added Games & Apps Grid (ONLY user-added apps)
-                        if (appsLoading) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(color = EmeraldGlow, strokeWidth = 2.5.dp)
-                            }
-                        } else if (addedApps.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Surface(
-                                    color = ObsidianCard.copy(alpha = 0.90f),
-                                    shape = RoundedCornerShape(18.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .darkNeonGlow(EmeraldGlow, cornerRadius = 18.dp, glowAlpha = 0.25f, strokeWidth = 0.9.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(24.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(64.dp)
-                                                .clip(RoundedCornerShape(18.dp))
-                                                .background(
-                                                    Brush.linearGradient(listOf(BalancedFillDark, HeavyFillDark))
-                                                )
-                                                .darkNeonGlow(EmeraldGlow, cornerRadius = 18.dp, glowAlpha = 0.35f, strokeWidth = 0.95.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.SportsEsports,
-                                                contentDescription = null,
-                                                tint = EmeraldWireframe,
-                                                modifier = Modifier.size(34.dp)
-                                            )
-                                        }
-                                        Text(
-                                            text = "Your Magic Library is Empty",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MagicTextPrimary
-                                        )
-                                        Text(
-                                            text = "Add your favorite games and apps. Tapping any game launches it with the Cyber-Magic sequence and arms the ultra-compact in-game sidebar.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MagicTextSecondary,
-                                            textAlign = TextAlign.Center,
-                                            lineHeight = 18.sp
-                                        )
-                                        Button(
-                                            onClick = { showAppPicker = true },
-                                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldGlow),
-                                            shape = RoundedCornerShape(12.dp),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(48.dp)
-                                                .testTag("home_empty_add_button")
-                                        ) {
-                                            Icon(Icons.Rounded.Add, contentDescription = null, tint = ObsidianGreenBg, modifier = Modifier.size(20.dp))
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(
-                                                text = "ADD GAMES & APPS",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = ObsidianGreenBg,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 104.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                                contentPadding = PaddingValues(bottom = 18.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                            ) {
-                                items(addedApps, key = { it.packageName }) { app ->
-                                    AddedGameTile(
-                                        app = app,
-                                        onLaunch = {
-                                            viewModel.playEpicLaunchSound()
-                                            launchingApp = app
-                                        },
-                                        onRemove = {
-                                            viewModel.removeAppFromMagic(app.packageName, app.name)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Minimal Bottom Status Toast
-                AnimatedVisibility(
-                    visible = bannerText != null && launchingApp == null,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 16.dp, vertical = 14.dp)
-                ) {
-                    bannerText?.let { msg ->
-                        Surface(
-                            color = ObsidianSurface.copy(alpha = 0.96f),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.darkNeonGlow(EmeraldGlow, cornerRadius = 12.dp, glowAlpha = 0.3f, strokeWidth = 0.85.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = EmeraldGlow, modifier = Modifier.size(16.dp))
-                                Text(msg, style = MaterialTheme.typography.bodySmall, color = MagicTextPrimary)
-                            }
-                        }
                     }
                 }
             }
         }
 
-        // Full-Screen 900ms "Tagda Launch Sequence" Cyber-Magic Overlay
-        launchingApp?.let { target ->
-            CyberMagicLaunchOverlay(
-                app = target,
-                onLaunchComplete = {
-                    val toLaunch = target
-                    launchingApp = null
-                    viewModel.launchGameNow(toLaunch)
-                }
-            )
-        }
-
-        // Sequential Intro Splash: Logo -> "GAME MAGIC" -> Home Screen
-        if (showSplash) {
-            SplashIntroOverlay(onFinished = { showSplash = false })
-        }
-    }
-}
-
-@Composable
-private fun AddedGameTile(
-    app: InstalledAppInfo,
-    onLaunch: () -> Unit,
-    onRemove: () -> Unit
-) {
-    val iconBitmap = remember(app.packageName) {
-        runCatching { app.icon?.toBitmap(128, 128)?.asImageBitmap() }.getOrNull()
-    }
-
-    Surface(
-        color = ObsidianCard.copy(alpha = 0.92f),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .darkNeonGlow(
-                glowColor = if (app.isGame) EmeraldGlow else HeavyPurpleGlow,
-                cornerRadius = 16.dp,
-                glowAlpha = 0.24f,
-                strokeWidth = 0.85.dp
-            )
-            .testTag("game_tile_${app.name}")
-            .clickable { onLaunch() }
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            // Subtle Top-Right Remove Pill
+        banner?.let { msg ->
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(ObsidianGreenBg.copy(alpha = 0.78f))
-                    .clickable { onRemove() },
-                contentAlignment = Alignment.Center
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 22.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CardDark)
+                    .border(1.dp, BorderOrange, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Remove ${app.name}",
-                    tint = MagicTextSecondary,
-                    modifier = Modifier.size(13.dp)
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(ObsidianGreenBg)
-                        .darkNeonGlow(
-                            glowColor = if (app.isGame) EmeraldDeepGlow else HeavyFillDeep,
-                            cornerRadius = 14.dp,
-                            glowAlpha = 0.25f,
-                            strokeWidth = 0.75.dp
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (iconBitmap != null) {
-                        Image(
-                            bitmap = iconBitmap,
-                            contentDescription = app.name,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.SportsEsports,
-                            contentDescription = app.name,
-                            tint = EmeraldGlow,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
-
-                Text(
-                    text = app.name,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MagicTextPrimary,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Surface(
-                    color = EmeraldDeepGlow.copy(alpha = 0.24f),
-                    shape = RoundedCornerShape(7.dp),
-                    border = BorderStroke(0.7.dp, EmeraldGlow.copy(alpha = 0.7f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = EmeraldWireframe, modifier = Modifier.size(12.dp))
-                        Text("PLAY", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EmeraldWireframe)
-                    }
-                }
+                Text(msg, color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
-    }
-}
 
-@Composable
-private fun CompactPermissionSetupCard(
-    perms: PermissionStatus,
-    onAllowOverlay: () -> Unit,
-    onAllowAccessibility: () -> Unit,
-    onAllowDnd: () -> Unit,
-    onAllowMic: () -> Unit
-) {
-    Surface(
-        color = ObsidianCard.copy(alpha = 0.94f),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .darkNeonGlow(HeavyPurpleGlow, cornerRadius = 14.dp, glowAlpha = 0.26f, strokeWidth = 0.85.dp)
-            .testTag("permission_setup_card")
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
-                Icon(Icons.Rounded.Shield, contentDescription = null, tint = HeavyVioletAccent, modifier = Modifier.size(16.dp))
-                Text(
-                    text = "Quick Permission Setup",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MagicTextPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                if (!perms.overlayGranted) {
-                    PermChip("Overlay", Modifier.weight(1f), onAllowOverlay)
+        if (showAppPicker) {
+            AlertDialog(
+                onDismissRequest = { showAppPicker = false },
+                containerColor = CardDark,
+                title = { Text("Add / Remove Games", color = BorderOrange, fontWeight = FontWeight.Black) },
+                text = {
+                    LazyColumn(modifier = Modifier.heightIn(max = 340.dp)) {
+                        items(allApps.size) { idx ->
+                            val app = allApps[idx]
+                            val isAdded = addedApps.any { it.packageName == app.packageName }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (isAdded) viewModel.removeAppFromMagic(app.packageName, app.name)
+                                        else viewModel.addAppToMagic(app.packageName, app.name)
+                                    }
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(app.name, color = TextWhite, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                Text(if (isAdded) "ADDED" else "+ ADD", color = if (isAdded) Color(0xFF00E676) else BorderOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showAppPicker = false }) {
+                        Text("DONE", color = BorderOrange, fontWeight = FontWeight.Bold)
+                    }
                 }
-                if (!perms.accessibilityGranted) {
-                    PermChip("Auto-Detect", Modifier.weight(1f), onAllowAccessibility)
-                }
-                if (!perms.dndGranted) {
-                    PermChip("DND", Modifier.weight(1f), onAllowDnd)
-                }
-                if (!perms.micGranted) {
-                    PermChip("Voice DSP", Modifier.weight(1f), onAllowMic)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PermChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(
-        color = HeavyFillDark.copy(alpha = 0.85f),
-        shape = RoundedCornerShape(9.dp),
-        border = BorderStroke(0.8.dp, HeavyPurpleGlow),
-        modifier = modifier
-            .height(34.dp)
-            .clickable { onClick() }
-    ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 4.dp)) {
-            Text(
-                text = label,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = MagicTextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+@Composable
+private fun RmSectionTitle(text: String) {
+    Text(text = text, color = BorderOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
+}
+
+@Composable
+private fun RmSectionCard(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(CardDark)
+            .border(1.dp, BorderOrange.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+            .padding(12.dp),
+        content = content
+    )
+}
+
+@Composable
+private fun SpecCell(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(BgBlack)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(label, color = TextGray, fontSize = 9.sp)
+        Text(value, color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun PerfModeChip(mode: RedMagicPerfMode, selected: Boolean, modifier: Modifier = Modifier, isCrimson: Boolean = false, onClick: () -> Unit) {
+    val accent = if (isCrimson) BorderCrimson else BorderOrange
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) accent.copy(alpha = 0.22f) else BgBlack)
+            .border(1.1.dp, if (selected) accent else TextGray.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(vertical = 9.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(mode.label, color = if (selected) TextWhite else TextGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun LiveStatBox(label: String, value: String, progress: Float, barColor: Color, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(9.dp))
+            .background(BgBlack)
+            .padding(8.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, color = TextGray, fontSize = 9.5.sp)
+            Text(value, color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Black)
+        }
+        Spacer(Modifier.height(5.dp))
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+            color = barColor,
+            trackColor = Color(0xFF22222A)
+        )
+    }
+}
+
+@Composable
+private fun RmSliderRow(label: String, value: Float, onChange: (Float) -> Unit) {
+    Column {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, color = TextGray, fontSize = 10.sp)
+            Text("${(value * 100).toInt()}", color = TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            modifier = Modifier.height(24.dp),
+            colors = SliderDefaults.colors(thumbColor = BorderOrange, activeTrackColor = BorderOrange)
+        )
+    }
+}
+
+@Composable
+private fun RmSwitchRow(label: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = TextWhite, fontSize = 11.sp)
+        Switch(
+            checked = checked,
+            onCheckedChange = onChecked,
+            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = BorderOrange)
+        )
     }
 }
