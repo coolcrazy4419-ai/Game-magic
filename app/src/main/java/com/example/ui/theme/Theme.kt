@@ -9,8 +9,9 @@ val ObsidianGreenBg = Color(0xFF070709)
 val RedMagicOrange = Color(0xFFFF551A)
 val RedMagicCrimson = Color(0xFFFF2A3C)
 
-// Legacy color aliases so SplashIntroOverlay & other screens compile cleanly
+// Legacy color aliases so all existing UI components compile cleanly
 val EmeraldGlow = Color(0xFFFF551A)
+val EmeraldDeepGlow = Color(0xFFCC3D0E)
 val EmeraldWireframe = Color(0xFFFF551A)
 val HeavyPurpleGlow = Color(0xFFFF2A3C)
 val MagicTextPrimary = Color(0xFFF5F5F7)
