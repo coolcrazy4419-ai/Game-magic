@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "944781179849",
+    "project_id": "gen-lang-client-0657679812",
+    "storage_bucket": "gen-lang-client-0657679812.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:944781179849:android:87168a792912c424bb4618",
+        "android_client_info": {
+          "package_name": "com.aistudio.gamingturbo.xrkzn"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDHrnVMshVuZS0eY5r0PMa7DAo65jD9bnI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
