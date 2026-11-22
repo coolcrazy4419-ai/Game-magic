@@ -1,9 +1,12 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -29,6 +32,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,6 +42,25 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+enum class GameVisualFilter(
+    val id: Int,
+    val label: String,
+    val tintColor: Color,
+    val tintAlpha: Float,
+    val accentColor: Color
+) {
+    ORIGINAL(0, "Original", Color.Transparent, 0f, Color(0xFF90A4AE)),
+    HDR_VIVID(1, "HDR Vivid", Color(0xFF00E5FF), 0.08f, Color(0xFF00E5FF)),
+    ULTRA_CRISP(2, "Ultra Crisp", Color(0xFF76FF03), 0.07f, Color(0xFF76FF03)),
+    ENEMY_SPOTTER(3, "Spotter", Color(0xFFFFEA00), 0.09f, Color(0xFFFFEA00)),
+    NIGHT_VISION(4, "Night Vis", Color(0xFF00E676), 0.12f, Color(0xFF00E676)),
+    COOL_PRO(5, "Cool Pro", Color(0xFF2979FF), 0.09f, Color(0xFF448AFF)),
+    WARM_BOOST(6, "Warm Boost", Color(0xFFFF6D00), 0.09f, Color(0xFFFF9100)),
+    SOFT_EYE(7, "Soft Eye", Color(0xFFFFB300), 0.11f, Color(0xFFFFCA28)),
+    NEON_CONTRAST(8, "Neon Pop", Color(0xFFD500F9), 0.08f, Color(0xFFE040FB)),
+    AMOLED_DARK(9, "AMOLED", Color(0xFF000000), 0.16f, Color(0xFF80CBC4))
+}
 
 fun resolveModeAccent(s: MagicSettings): Color = when {
     s.iceCoolingEnabled -> IceBlueGlow
@@ -68,6 +91,10 @@ sealed interface MagicSidebarAction {
     data class ToggleDnd(val enabled: Boolean) : MagicSidebarAction
     data class ToggleTouchGuard(val enabled: Boolean) : MagicSidebarAction
     data object TakeScreenshot : MagicSidebarAction
+    data object ToggleScreenRecording : MagicSidebarAction
+    data class SelectVisualFilter(val filter: GameVisualFilter) : MagicSidebarAction
+    data class ToggleFloatingCall(val enabled: Boolean) : MagicSidebarAction
+    data class ToggleSmartVoiceMic(val enabled: Boolean) : MagicSidebarAction
     data class ToggleIceCooling(val enabled: Boolean) : MagicSidebarAction
     data class SetOverheatThreshold(val tempC: Float) : MagicSidebarAction
     data class SetLowBatteryThreshold(val pct: Int) : MagicSidebarAction
@@ -81,12 +108,13 @@ sealed interface MagicSidebarAction {
 }
 
 /**
- * Ultra-Compact Game Magic Floating Drawer UI (`180.dp` width, max `64%` screen height).
- * Vertical scrollable column featuring:
- *  - Live Telemetry Header (Clock, FPS, RAM %, Temp °C & Bat %, Ping ms)
- *  - 1-Tap Turbo Boost button with expanding emerald/violet shockwave animation
- *  - 4-Theme Performance Mode Pill Selector (Balanced / Heavy / Ultra / Ice-Cooling)
- *  - Vertical swipe-up drawer with all independent ON/OFF gaming tools & sidebar setup.
+ * Upgraded Pro Game Magic Floating Drawer (`228.dp` ~42% screen width, max `76%` height).
+ * Features:
+ *  - Enhanced multi-ring Neon Glow border
+ *  - Icon-tile grid (tap icon to toggle ON/OFF, label underneath—no side switches)
+ *  - 10 In-Game Visual & Smoothness Filters
+ *  - Screen Recorder, Clear Memory, Floating Call Attend, Smart Voice-Chat Mic, DND Swipe Blocker
+ *  - Expandable `More ▼` section preserving 100% of original tools (Ping Shield, Heat/Battery alerts, Voice Presets, Crosshair, Sidebar Setup)
  */
 @Composable
 fun CompactSwipeUpSidebar(
@@ -95,10 +123,19 @@ fun CompactSwipeUpSidebar(
     netStats: NetworkTelemetry,
     boostShockwaveTick: Int,
     boostReadout: String?,
+    activeFilter: GameVisualFilter = GameVisualFilter.ORIGINAL,
+    isRecordingScreen: Boolean = false,
+    recordingSeconds: Int = 0,
+    floatingCallEnabled: Boolean = true,
+    smartVoiceChatMicOnly: Boolean = true,
+    isVoiceChatDetected: Boolean = false,
     onClose: () -> Unit,
     onAction: (MagicSidebarAction) -> Unit
 ) {
     var clockText by remember { mutableStateOf("") }
+    var showMoreSection by remember { mutableStateOf(false) }
+    var showFilterTray by remember { mutableStateOf(false) }
+
     LaunchedEffect(settings.use24HourClock) {
         val pattern = if (settings.use24HourClock) "HH:mm:ss" else "hh:mm:ss a"
         val fmt = SimpleDateFormat(pattern, Locale.getDefault())
@@ -108,7 +145,6 @@ fun CompactSwipeUpSidebar(
         }
     }
 
-    // Smooth multi-ring shockwave animation triggered by 1-Tap Turbo Boost
     val shockwave = remember { Animatable(0f) }
     LaunchedEffect(boostShockwaveTick) {
         if (boostShockwaveTick > 0) {
@@ -129,9 +165,9 @@ fun CompactSwipeUpSidebar(
     )
 
     val panelShape = if (settings.edgeOnLeft) {
-        RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
+        RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
     } else {
-        RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
+        RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp)
     }
 
     val crosshairColors = remember {
@@ -142,14 +178,21 @@ fun CompactSwipeUpSidebar(
         shape = panelShape,
         color = Color.Transparent,
         modifier = Modifier
-            .width(180.dp)
-            .fillMaxHeight(0.64f)
-            .darkNeonGlow(accent, cornerRadius = 16.dp, glowAlpha = 0.36f, strokeWidth = 0.95.dp)
+            .width(228.dp)
+            .fillMaxHeight(0.76f)
+            .darkNeonGlow(accent, cornerRadius = 18.dp, glowAlpha = 0.52f, strokeWidth = 1.4.dp)
+            .border(
+                width = 1.2.dp,
+                brush = Brush.verticalGradient(
+                    listOf(accent, EmeraldGlow.copy(alpha = 0.8f), HeavyPurpleGlow.copy(alpha = 0.85f), accent)
+                ),
+                shape = panelShape
+            )
             .testTag("compact_magic_drawer")
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = {} // Consume inside taps so backdrop only collapses on outside taps
+                onClick = {}
             )
     ) {
         Box(
@@ -158,42 +201,40 @@ fun CompactSwipeUpSidebar(
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            deepFill.copy(alpha = 0.95f),
-                            ObsidianGreenBg.copy(alpha = 0.97f),
-                            ObsidianSurface.copy(alpha = 0.97f)
+                            deepFill.copy(alpha = 0.96f),
+                            ObsidianGreenBg.copy(alpha = 0.98f),
+                            ObsidianSurface.copy(alpha = 0.98f)
                         )
                     )
                 )
         ) {
-            // Dual-Ring Emerald & Royal Violet Shockwave Animation across the compact drawer
+            // Dual-Ring Emerald & Royal Violet Shockwave Animation
             if (shockwave.value in 0.01f..0.99f) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val p = shockwave.value
                     val maxRadius = size.maxDimension * 0.95f
-                    val origin = Offset(size.width / 2f, size.height * 0.24f)
+                    val origin = Offset(size.width / 2f, size.height * 0.22f)
                     val alpha = (1f - p).coerceIn(0f, 1f)
 
-                    // Outer Emerald Shockwave
                     drawCircle(
-                        color = EmeraldGlow.copy(alpha = alpha * 0.24f),
+                        color = EmeraldGlow.copy(alpha = alpha * 0.28f),
                         radius = p * maxRadius,
                         center = origin,
-                        style = Stroke(width = 7.dp.toPx())
+                        style = Stroke(width = 8.dp.toPx())
                     )
                     drawCircle(
-                        color = EmeraldWireframe.copy(alpha = alpha * 0.85f),
+                        color = EmeraldWireframe.copy(alpha = alpha * 0.9f),
                         radius = p * maxRadius,
                         center = origin,
-                        style = Stroke(width = 2.2.dp.toPx())
+                        style = Stroke(width = 2.4.dp.toPx())
                     )
-                    // Inner Deep-Violet Secondary Wave
                     val p2 = ((p - 0.14f) / 0.86f).coerceIn(0f, 1f)
                     if (p2 > 0f) {
                         drawCircle(
-                            color = HeavyPurpleGlow.copy(alpha = (1f - p2) * 0.78f),
+                            color = HeavyPurpleGlow.copy(alpha = (1f - p2) * 0.82f),
                             radius = p2 * maxRadius * 0.76f,
                             center = origin,
-                            style = Stroke(width = 2.dp.toPx())
+                            style = Stroke(width = 2.2.dp.toPx())
                         )
                     }
                 }
@@ -202,9 +243,9 @@ fun CompactSwipeUpSidebar(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .padding(horizontal = 9.dp, vertical = 9.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // ===== 1. LIVE TELEMETRY HEADER =====
                 TelemetryHeaderBlock(
@@ -216,68 +257,115 @@ fun CompactSwipeUpSidebar(
                     onClose = onClose
                 )
 
-                // ===== 2. 1-TAP TURBO BOOST BUTTON =====
-                TurboBoostActionButton(
-                    boostReadout = boostReadout,
-                    isFlashing = shockwave.value in 0.01f..0.45f,
-                    onBoost = { onAction(MagicSidebarAction.TurboBoostNow) }
-                )
-
-                // ===== 3. 4-THEME PERFORMANCE MODE PILL SELECTOR (Balanced / Heavy / Ultra / Ice-Cooling) =====
+                // ===== 2. 4-THEME PERFORMANCE MODE PILL SELECTOR =====
                 PerformanceModePillGrid(
                     settings = settings,
                     onSelectMode = { mode -> onAction(MagicSidebarAction.SetPerformanceMode(mode)) },
                     onToggleIceCooling = { onAction(MagicSidebarAction.ToggleIceCooling(!settings.iceCoolingEnabled)) }
                 )
 
-                // Subtle Vertical Scroll Cue
+                // ===== 3. ICON-GRID GAMING CONTROLS (TAP ICON TO TOGGLE ON/OFF, NAME UNDERNEATH) =====
+                Text(
+                    text = "PRO GAMING CONTROLS",
+                    color = accent,
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.8.sp
+                )
+
+                // Row 1: Clear Memory | Screen Rec | Game Filters
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = null, tint = accent.copy(alpha = 0.72f), modifier = Modifier.size(13.dp))
-                    Text("SWIPE UP FOR TOOLS", fontSize = 8.sp, color = MagicTextSecondary, letterSpacing = 0.8.sp)
-                    Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = null, tint = accent.copy(alpha = 0.72f), modifier = Modifier.size(13.dp))
+                    IconFeatureTile(
+                        icon = Icons.Rounded.CleaningServices,
+                        label = boostReadout ?: "Clear RAM",
+                        active = boostReadout != null || shockwave.value in 0.01f..0.6f,
+                        glowColor = EmeraldGlow,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onAction(MagicSidebarAction.TurboBoostNow) }
+                    )
+                    val recMins = recordingSeconds / 60
+                    val recSecs = recordingSeconds % 60
+                    IconFeatureTile(
+                        icon = if (isRecordingScreen) Icons.Rounded.StopCircle else Icons.Rounded.Videocam,
+                        label = if (isRecordingScreen) String.format("%02d:%02d", recMins, recSecs) else "Screen Rec",
+                        active = isRecordingScreen,
+                        glowColor = UltraCrimsonGlow,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onAction(MagicSidebarAction.ToggleScreenRecording) }
+                    )
+                    IconFeatureTile(
+                        icon = Icons.Rounded.AutoFixHigh,
+                        label = if (activeFilter == GameVisualFilter.ORIGINAL) "10 Filters" else activeFilter.label,
+                        active = activeFilter != GameVisualFilter.ORIGINAL || showFilterTray,
+                        glowColor = activeFilter.accentColor,
+                        modifier = Modifier.weight(1f),
+                        onClick = { showFilterTray = !showFilterTray }
+                    )
                 }
 
-                // ===== 4. SWIPE-UP SECTION: LAG-FREE ENGINE & CLOCK =====
-                CompactSectionCard(title = "LAG-FREE ENGINE", accent = EmeraldGlow) {
-                    CompactToggleRow("Sustained Perf", settings.sustainedPerformanceEnabled, EmeraldGlow) {
-                        onAction(MagicSidebarAction.ToggleSustainedPerformance(it))
-                    }
-                    CompactToggleRow("24h Clock", settings.use24HourClock, BalancedCyanGlow) {
-                        onAction(MagicSidebarAction.Toggle24HourClock(it))
-                    }
-                }
-
-                // ===== 5. SWIPE-UP SECTION: REAL-TIME VOICE / MIC CHANGER =====
-                CompactSectionCard(title = "VOICE CHANGER DSP", accent = HeavyPurpleGlow) {
-                    CompactToggleRow("Voice FX", settings.voiceChangerEnabled, HeavyPurpleGlow) {
-                        onAction(MagicSidebarAction.ToggleVoiceChanger(it))
-                    }
-                    CompactToggleRow("Live Monitor", settings.liveMicMonitorEnabled, HeavyVioletAccent) {
-                        onAction(MagicSidebarAction.ToggleLiveMicMonitor(it))
-                    }
-                    VoicePreset.entries.chunked(2).forEach { pair ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            pair.forEach { preset ->
-                                val selected = settings.voicePreset == preset
-                                Surface(
-                                    color = if (selected) HeavyFillDeep else ObsidianGreenBg,
-                                    shape = RoundedCornerShape(6.dp),
-                                    border = BorderStroke(0.75.dp, if (selected) HeavyPurpleGlow else ObsidianDivider),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { onAction(MagicSidebarAction.SelectVoicePreset(preset)) }
-                                ) {
-                                    Box(Modifier.padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = preset.label,
-                                            fontSize = 9.sp,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (selected) Color.White else MagicTextSecondary
-                                        )
+                // Expandable 10 In-Game Visual & Smoothness Filters Grid
+                AnimatedVisibility(
+                    visible = showFilterTray,
+                    enter = expandVertically(),
+                    exit = shrinkVertically()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(ObsidianCard.copy(alpha = 0.94f))
+                            .border(0.85.dp, BalancedCyanGlow.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                            .padding(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(
+                            text = "IN-GAME GRAPHICS & SMOOTH FILTERS (10)",
+                            color = BalancedCyanGlow,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.6.sp
+                        )
+                        GameVisualFilter.entries.chunked(2).forEach { pair ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                pair.forEach { filter ->
+                                    val picked = activeFilter == filter
+                                    Surface(
+                                        color = if (picked) filter.accentColor.copy(alpha = 0.22f) else ObsidianGreenBg,
+                                        shape = RoundedCornerShape(7.dp),
+                                        border = BorderStroke(
+                                            width = if (picked) 1.dp else 0.65.dp,
+                                            color = if (picked) filter.accentColor else ObsidianDivider
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable { onAction(MagicSidebarAction.SelectVisualFilter(filter)) }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .clip(CircleShape)
+                                                    .background(filter.accentColor)
+                                            )
+                                            Text(
+                                                text = filter.label,
+                                                color = if (picked) Color.White else MagicTextSecondary,
+                                                fontSize = 8.5.sp,
+                                                fontWeight = if (picked) FontWeight.Bold else FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -285,486 +373,48 @@ fun CompactSwipeUpSidebar(
                     }
                 }
 
-                // ===== 6. SWIPE-UP SECTION: PRO ONLINE GAMING TOOLS =====
-                CompactSectionCard(title = "PRO GAMING TOOLS", accent = BalancedCyanGlow) {
-                    CompactToggleRow("Crosshair", settings.crosshairEnabled, EmeraldGlow) {
-                        onAction(MagicSidebarAction.ToggleCrosshair(it))
-                    }
-                    if (settings.crosshairEnabled) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            MiniPillButton(settings.crosshairStyle.label, EmeraldGlow) {
-                                onAction(MagicSidebarAction.CycleCrosshairStyle)
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                MiniPillButton("-", MagicTextSecondary) { onAction(MagicSidebarAction.AdjustCrosshairSize(-2)) }
-                                MiniPillButton("+", MagicTextSecondary) { onAction(MagicSidebarAction.AdjustCrosshairSize(2)) }
-                            }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            crosshairColors.forEach { hex ->
-                                val picked = settings.crosshairColorHex == hex
-                                Box(
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(hex))
-                                        .border(if (picked) 1.5.dp else 0.6.dp, if (picked) Color.White else ObsidianDivider, CircleShape)
-                                        .clickable { onAction(MagicSidebarAction.SetCrosshairColor(hex)) }
-                                )
-                            }
-                        }
-                    }
-                    CompactToggleRow("DND Blocker", settings.dndEnabled, UltraCrimsonGlow) {
-                        onAction(MagicSidebarAction.ToggleDnd(it))
-                    }
-                    CompactToggleRow("Touch Guard", settings.touchGuardEnabled, IceBlueGlow) {
-                        onAction(MagicSidebarAction.ToggleTouchGuard(it))
-                    }
-                    Surface(
-                        color = BalancedFillDark.copy(alpha = 0.72f),
-                        shape = RoundedCornerShape(7.dp),
-                        border = BorderStroke(0.75.dp, BalancedCyanGlow),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onAction(MagicSidebarAction.TakeScreenshot) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 6.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Rounded.Screenshot, contentDescription = "Screenshot", tint = BalancedCyanGlow, modifier = Modifier.size(13.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("SCREENSHOT", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MagicTextPrimary)
-                        }
-                    }
-                }
-
-                // ===== 7. SWIPE-UP SECTION: THERMAL & BATTERY ALERTS =====
-                CompactSectionCard(title = "THERMAL & BATTERY", accent = IceBlueGlow) {
-                    if (settings.iceCoolingEnabled && settings.coolingBaselineTempC > 0f) {
-                        val drop = (settings.coolingBaselineTempC - sysStats.batteryTempC).coerceAtLeast(0f)
-                        Text(
-                            text = if (drop > 0.05f) "Ice-Cooling Active (-${"%.1f".format(drop)}°C)" else "Ice-Cooling Throttling Active",
-                            fontSize = 9.sp,
-                            color = IceBlueGlow,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Heat Alert", fontSize = 9.sp, color = MagicTextSecondary)
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            listOf(41f to "41°C", 43f to "43°C").forEach { (temp, lbl) ->
-                                val active = settings.overheatThresholdC == temp
-                                MiniPillButton(lbl, if (active) UltraCrimsonGlow else MagicTextSecondary, active) {
-                                    onAction(MagicSidebarAction.SetOverheatThreshold(temp))
-                                }
-                            }
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Low Bat", fontSize = 9.sp, color = MagicTextSecondary)
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            listOf(15 to "15%", 20 to "20%").forEach { (pct, lbl) ->
-                                val active = settings.lowBatteryThresholdPct == pct
-                                MiniPillButton(lbl, if (active) WarningAmberGlow else MagicTextSecondary, active) {
-                                    onAction(MagicSidebarAction.SetLowBatteryThreshold(pct))
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ===== 8. SWIPE-UP SECTION: EARLY NETWORK DROP WARNING & PING SHIELD =====
-                CompactSectionCard(title = "PING SHIELD", accent = BalancedCyanGlow) {
-                    CompactToggleRow("Drop Alert", settings.pingShieldEnabled, BalancedCyanGlow) {
-                        onAction(MagicSidebarAction.TogglePingShield(it))
-                    }
-                    Text(
-                        text = "${netStats.transport.label} • ${netStats.signalBars}/4 Bars (${netStats.rssiDbm}dBm)",
-                        fontSize = 9.sp,
-                        color = if (netStats.isWarningActive) WarningAmberGlow else EmeraldGlow
+                // Row 2: DND + Blocker | In-Game Call | Smart Voice Mic
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    IconFeatureTile(
+                        icon = Icons.Rounded.DoNotDisturbOn,
+                        label = "DND Lock",
+                        active = settings.dndEnabled,
+                        glowColor = UltraCrimsonGlow,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onAction(MagicSidebarAction.ToggleDnd(!settings.dndEnabled)) }
                     )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(80, 120, 180).forEach { limit ->
-                            val active = settings.pingAlertThresholdMs == limit
-                            Surface(
-                                color = if (active) BalancedFillDeep else ObsidianGreenBg,
-                                shape = RoundedCornerShape(6.dp),
-                                border = BorderStroke(0.7.dp, if (active) BalancedCyanGlow else ObsidianDivider),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { onAction(MagicSidebarAction.SetPingThreshold(limit)) }
-                            ) {
-                                Box(Modifier.padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-                                    Text("${limit}ms", fontSize = 8.sp, color = if (active) Color.White else MagicTextSecondary, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ===== 9. SWIPE-UP SECTION: SIDEBAR CUSTOMISATION =====
-                CompactSectionCard(title = "SIDEBAR SETUP", accent = EmeraldGlow) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Edge Side", fontSize = 9.sp, color = MagicTextSecondary)
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            MiniPillButton("L", if (settings.edgeOnLeft) EmeraldGlow else MagicTextSecondary, settings.edgeOnLeft) {
-                                onAction(MagicSidebarAction.SetEdgeOnLeft(true))
-                            }
-                            MiniPillButton("R", if (!settings.edgeOnLeft) EmeraldGlow else MagicTextSecondary, !settings.edgeOnLeft) {
-                                onAction(MagicSidebarAction.SetEdgeOnLeft(false))
-                            }
-                        }
-                    }
-                    Text("Icon Size (${"%.1f".format(settings.edgeSizeScale)}x)", fontSize = 9.sp, color = MagicTextSecondary)
-                    Slider(
-                        value = settings.edgeSizeScale,
-                        onValueChange = { onAction(MagicSidebarAction.SetEdgeSize(it)) },
-                        valueRange = 0.8f..1.4f,
-                        colors = SliderDefaults.colors(thumbColor = EmeraldGlow, activeTrackColor = EmeraldGlow),
-                        modifier = Modifier.height(22.dp)
+                    IconFeatureTile(
+                        icon = Icons.Rounded.PhoneInTalk,
+                        label = "In-Game Call",
+                        active = floatingCallEnabled,
+                        glowColor = BalancedCyanGlow,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onAction(MagicSidebarAction.ToggleFloatingCall(!floatingCallEnabled)) }
                     )
-                    Text("Opacity (${(settings.edgeOpacity * 100).toInt()}%)", fontSize = 9.sp, color = MagicTextSecondary)
-                    Slider(
-                        value = settings.edgeOpacity,
-                        onValueChange = { onAction(MagicSidebarAction.SetEdgeOpacity(it)) },
-                        valueRange = 0.35f..1.0f,
-                        colors = SliderDefaults.colors(thumbColor = EmeraldGlow, activeTrackColor = EmeraldGlow),
-                        modifier = Modifier.height(22.dp)
-                    )
-                    CompactToggleRow("Sounds", settings.soundEffectsEnabled, EmeraldGlow) {
-                        onAction(MagicSidebarAction.ToggleSoundEffects(it))
-                    }
-                    CompactToggleRow("Fast Anim", settings.fastAnimationsEnabled, BalancedCyanGlow) {
-                        onAction(MagicSidebarAction.ToggleFastAnimations(it))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TelemetryHeaderBlock(
-    settings: MagicSettings,
-    clockText: String,
-    sysStats: SystemTelemetry,
-    netStats: NetworkTelemetry,
-    accent: Color,
-    onClose: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = when {
-                        settings.iceCoolingEnabled -> "ICE-COOLING"
-                        settings.performanceMode == PerformanceMode.ULTRA -> "ULTRA MAGIC"
-                        settings.performanceMode == PerformanceMode.HEAVY -> "HEAVY MAGIC"
-                        else -> "GAME MAGIC"
-                    },
-                    color = accent,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 0.9.sp
-                )
-                Text(
-                    text = clockText.ifEmpty { "--:--:--" },
-                    color = MagicTextPrimary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(ObsidianCard)
-                    .clickable { onClose() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close Drawer", tint = MagicTextSecondary, modifier = Modifier.size(13.dp))
-            }
-        }
-
-        // Crisp 2x2 Telemetry Strip (Live FPS, RAM %, Temp °C & Bat %, Live Ping ms)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(9.dp))
-                .background(ObsidianGreenBg.copy(alpha = 0.88f))
-                .border(0.75.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(9.dp))
-                .padding(horizontal = 7.dp, vertical = 5.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MiniStat("${sysStats.liveFps} FPS", EmeraldGlow)
-                MiniStat("RAM ${sysStats.ramUsagePercent}%", BalancedCyanGlow)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                val tempColor = if (sysStats.batteryTempC >= settings.overheatThresholdC) UltraCrimsonGlow else IceBlueGlow
-                MiniStat("${"%.1f".format(sysStats.batteryTempC)}°C • ${sysStats.batteryPercent}%", tempColor)
-                val pingColor = when {
-                    netStats.pingMs < 0 -> MagicTextSecondary
-                    netStats.pingMs < settings.pingAlertThresholdMs -> EmeraldGlow
-                    else -> UltraCrimsonGlow
-                }
-                MiniStat(if (netStats.pingMs >= 0) "${netStats.pingMs}ms" else "--", pingColor)
-            }
-        }
-    }
-}
-
-@Composable
-private fun TurboBoostActionButton(
-    boostReadout: String?,
-    isFlashing: Boolean,
-    onBoost: () -> Unit
-) {
-    Surface(
-        color = Color.Transparent,
-        shape = RoundedCornerShape(10.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .darkNeonGlow(
-                glowColor = if (isFlashing) HeavyPurpleGlow else EmeraldGlow,
-                cornerRadius = 10.dp,
-                glowAlpha = if (isFlashing) 0.55f else 0.34f,
-                strokeWidth = 0.95.dp
-            )
-            .testTag("drawer_turbo_boost_button")
-            .clickable { onBoost() }
-    ) {
-        Row(
-            modifier = Modifier
-                .background(
-                    Brush.horizontalGradient(
-                        if (isFlashing) {
-                            listOf(EmeraldGlow.copy(alpha = 0.55f), HeavyPurpleGlow.copy(alpha = 0.65f))
+                    IconFeatureTile(
+                        icon = Icons.Rounded.RecordVoiceOver,
+                        label = if (settings.voiceChangerEnabled) {
+                            if (smartVoiceChatMicOnly && !isVoiceChatDetected) "Mic Standby" else "Voice FX"
                         } else {
-                            listOf(EmeraldDeepGlow.copy(alpha = 0.48f), HeavyFillDeep.copy(alpha = 0.65f))
-                        }
+                            "Voice FX"
+                        },
+                        active = settings.voiceChangerEnabled,
+                        glowColor = HeavyPurpleGlow,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onAction(MagicSidebarAction.ToggleVoiceChanger(!settings.voiceChangerEnabled)) }
                     )
-                )
-                .padding(vertical = 8.dp, horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(Icons.Rounded.Bolt, contentDescription = "Turbo Boost", tint = EmeraldWireframe, modifier = Modifier.size(15.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text = boostReadout ?: "TURBO BOOST",
-                color = Color.White,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
+                }
 
-/**
- * 2x2 Compact Pill Selector featuring all 4 signature Game Magic themes:
- * Balanced (Deep Sapphire / Dark Cyan), Heavy (Deep Royal Violet / Dark Purple),
- * Ultra (Deep Blood Crimson / Red-Orange), and Ice-Cooling (Deep Arctic Indigo / Ice-Blue).
- */
-@Composable
-private fun PerformanceModePillGrid(
-    settings: MagicSettings,
-    onSelectMode: (PerformanceMode) -> Unit,
-    onToggleIceCooling: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            ModeThemePill(
-                label = "Balanced",
-                icon = Icons.Rounded.Eco,
-                selected = !settings.iceCoolingEnabled && settings.performanceMode == PerformanceMode.BALANCED,
-                fillColor = BalancedFillDark,
-                glowColor = BalancedCyanGlow,
-                modifier = Modifier.weight(1f),
-                onClick = { onSelectMode(PerformanceMode.BALANCED) }
-            )
-            ModeThemePill(
-                label = "Heavy",
-                icon = Icons.Rounded.LocalFireDepartment,
-                selected = !settings.iceCoolingEnabled && settings.performanceMode == PerformanceMode.HEAVY,
-                fillColor = HeavyFillDark,
-                glowColor = HeavyPurpleGlow,
-                modifier = Modifier.weight(1f),
-                onClick = { onSelectMode(PerformanceMode.HEAVY) }
-            )
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            ModeThemePill(
-                label = "Ultra",
-                icon = Icons.Rounded.Whatshot,
-                selected = !settings.iceCoolingEnabled && settings.performanceMode == PerformanceMode.ULTRA,
-                fillColor = UltraFillDark,
-                glowColor = UltraCrimsonGlow,
-                modifier = Modifier.weight(1f),
-                onClick = { onSelectMode(PerformanceMode.ULTRA) }
-            )
-            ModeThemePill(
-                label = "Ice-Cool",
-                icon = Icons.Rounded.AcUnit,
-                selected = settings.iceCoolingEnabled,
-                fillColor = IceFillDark,
-                glowColor = IceBlueGlow,
-                modifier = Modifier.weight(1f),
-                onClick = onToggleIceCooling
-            )
-        }
-    }
-}
-
-@Composable
-private fun ModeThemePill(
-    label: String,
-    icon: ImageVector,
-    selected: Boolean,
-    fillColor: Color,
-    glowColor: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val pillMod = if (selected) {
-        modifier.darkNeonGlow(glowColor, cornerRadius = 8.dp, glowAlpha = 0.34f, strokeWidth = 0.9.dp)
-    } else {
-        modifier
-    }
-
-    Surface(
-        color = if (selected) fillColor else ObsidianCard,
-        shape = RoundedCornerShape(8.dp),
-        border = if (!selected) BorderStroke(0.65.dp, ObsidianDivider) else null,
-        modifier = pillMod
-            .testTag("drawer_mode_${label.lowercase()}")
-            .clickable { onClick() }
-    ) {
-        Row(
-            modifier = Modifier.padding(vertical = 6.dp, horizontal = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = if (selected) glowColor else MagicTextSecondary,
-                modifier = Modifier.size(12.dp)
-            )
-            Spacer(Modifier.width(3.dp))
-            Text(
-                text = label,
-                color = if (selected) glowColor else MagicTextSecondary,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun MiniStat(text: String, color: Color) {
-    Text(text = text, color = color, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-}
-
-@Composable
-private fun CompactSectionCard(
-    title: String,
-    accent: Color,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(ObsidianCard.copy(alpha = 0.9f))
-            .border(0.7.dp, accent.copy(alpha = 0.38f), RoundedCornerShape(10.dp))
-            .padding(horizontal = 7.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
-    ) {
-        Text(
-            text = title,
-            color = accent,
-            fontSize = 8.5.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = 0.7.sp
-        )
-        content()
-    }
-}
-
-@Composable
-private fun CompactToggleRow(
-    label: String,
-    checked: Boolean,
-    accent: Color,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 1.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, color = MagicTextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Medium)
-        Box(
-            modifier = Modifier
-                .width(30.dp)
-                .height(16.dp)
-                .clip(CircleShape)
-                .background(if (checked) accent.copy(alpha = 0.85f) else ObsidianGreenBg)
-                .border(0.75.dp, if (checked) accent else ObsidianDivider, CircleShape)
-                .padding(2.dp),
-            contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(if (checked) ObsidianGreenBg else MagicTextSecondary)
-            )
-        }
-    }
-}
-
-@Composable
-private fun MiniPillButton(
-    label: String,
-    tint: Color,
-    highlighted: Boolean = false,
-    onClick: () -> Unit
-) {
-    Surface(
-        color = if (highlighted) tint.copy(alpha = 0.22f) else ObsidianGreenBg,
-        shape = RoundedCornerShape(6.dp),
-        border = BorderStroke(0.7.dp, if (highlighted) tint else ObsidianDivider),
-        modifier = Modifier.clickable { onClick() }
-    ) {
-        Text(
-            text = label,
-            color = tint,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-        )
-    }
-}
+                // Row 3: Crosshair | Screenshot | Touch Guard
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    IconFeatureTile(
+                        icon = Icons.Rounded.GpsFixed,
+                        label = "Crosshair",
+                        active = settings.crosshairEnabled,
+                        glowColor = EmeraldGlow
