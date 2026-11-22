@@ -8,12 +8,15 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.WindowManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.RandomAccessFile
+import java.net.InetSocketAddress
+import java.net.Socket
 
 enum class RedMagicPerfMode(val label: String) {
     BALANCED("Balanced"),
@@ -22,7 +25,6 @@ enum class RedMagicPerfMode(val label: String) {
     LAG_FREE("Lag-free")
 }
 
-// 6 Best Pro Gaming Filters (replaces old basic filters)
 enum class RedMagicFilter(val label: String, val colorHex: Long, val alpha: Float) {
     ORIGINAL("Original", 0x00000000, 0f),
     PRO_CLARITY("Pro Clarity", 0xFF00E5FF, 0.05f),
@@ -95,6 +97,7 @@ object RedMagicEngine {
     private var initialized = false
     private var lastCpuTotal = 0L
     private var lastCpuIdle = 0L
+    @Volatile private var cachedPingMs = 24
 
     fun init(context: Context) {
         if (initialized) return
@@ -223,8 +226,15 @@ object RedMagicEngine {
 
         val cpuPct = readCpuUsagePercent()
         val gpuPct = (cpuPct * 1.12f).toInt().coerceIn(16, 94)
-        val sys = SystemTelemetryEngine.readTelemetry(context)
-        val net = NetworkMonitorEngine.telemetry.value
+        val liveFps = SystemTelemetryEngine.currentFps.value.takeIf { it > 0 } ?: _state.value.targetFps.coerceAtMost(hz)
+
+        runCatching {
+            val start = SystemClock.elapsedRealtime()
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress("1.1.1.1", 53), 400)
+            }
+            cachedPingMs = (SystemClock.elapsedRealtime() - start).toInt().coerceIn(12, 180)
+        }
 
         val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && Build.SOC_MODEL != Build.UNKNOWN) {
             Build.SOC_MODEL
@@ -239,8 +249,8 @@ object RedMagicEngine {
             totalRamGb = totalRam,
             totalStorageGb = totalStorage,
             refreshRateHz = hz,
-            fps = if (sys.estimatedFps > 0) sys.estimatedFps else _state.value.targetFps,
-            pingMs = if (net.pingMs > 0) net.pingMs else 24,
+            fps = liveFps,
+            pingMs = cachedPingMs,
             cpuPercent = cpuPct,
             gpuPercent = gpuPct,
             ramUsedGb = usedRam,
