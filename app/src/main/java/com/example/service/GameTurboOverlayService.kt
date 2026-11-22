@@ -214,10 +214,15 @@ class GameTurboOverlayService : Service() {
         }
     }
 
+    private fun startActiveVoicePreset() {
+        val preset = VoicePreset.entries.getOrElse(1) { VoicePreset.entries.first() }
+        VoiceChangerEngine.start(applicationContext, preset, false)
+    }
+
     private fun onGameEntered() {
         val rm = RedMagicEngine.state.value
         if (rm.blockAlerts) SystemTelemetryEngine.setDndEnabled(applicationContext, true)
-        if (rm.voiceChanger) VoiceChangerEngine.start(applicationContext, VoicePreset.DEEP_PRO, false)
+        if (rm.voiceChanger) startActiveVoicePreset()
         mainHandler.post {
             showEdgePill()
             syncAuxOverlays()
@@ -569,7 +574,7 @@ class GameTurboOverlayService : Service() {
                 if (action.enabled) {
                     val ok = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                     if (ok) {
-                        VoiceChangerEngine.start(applicationContext, VoicePreset.DEEP_PRO, false)
+                        startActiveVoicePreset()
                         RedMagicEngine.update(applicationContext) { it.copy(voiceChanger = true) }
                     } else {
                         Toast.makeText(this, "Grant Mic permission in Game Magic", Toast.LENGTH_SHORT).show()
