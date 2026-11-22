@@ -200,8 +200,15 @@ class GameTurboOverlayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                activeGamePackage = null
+                mainHandler.post { hideAllGameOverlays() }
                 stopSelf()
                 return START_NOT_STICKY
+            }
+            ACTION_START -> {
+                if (activeGamePackage == null) {
+                    mainHandler.post { hideAllGameOverlays() }
+                }
             }
             ACTION_FOREGROUND_CHANGED -> {
                 val pkg = intent.getStringExtra(EXTRA_PACKAGE_NAME)
@@ -241,13 +248,14 @@ class GameTurboOverlayService : Service() {
     }
 
     private fun handleForegroundUpdate(pkg: String?, isGameActive: Boolean) {
-        if (isGameActive && pkg != null) {
+        val safeIsGame = isGameActive && pkg != null && !isLauncherOrSystemPackage(pkg)
+        if (safeIsGame && pkg != null) {
             if (activeGamePackage != pkg) {
                 activeGamePackage = pkg
                 onGameEntered()
             }
         } else {
-            if (activeGamePackage != null) {
+            if (activeGamePackage != null || edgeTriggerView != null || panelHostView != null) {
                 activeGamePackage = null
                 onGameExited()
             }
@@ -355,26 +363,28 @@ class GameTurboOverlayService : Service() {
         fallbackMonitorJob = serviceScope.launch {
             val usm = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             while (isActive) {
-                delay(1200L)
-                if (usm == null) continue
+                delay(800L)
                 val selected = TurboSettingsStore.state.value.selectedPackages
+                    .filterNot { isLauncherOrSystemPackage(it) }
+                    .toSet()
+
                 if (selected.isEmpty()) {
-                    if (activeGamePackage != null) handleForegroundUpdate(null, false)
+                    if (activeGamePackage != null || edgeTriggerView != null) {
+                        handleForegroundUpdate(null, false)
+                    }
                     continue
                 }
 
                 val a11yPkg = GameAccessibilityService.instance?.rootInActiveWindow?.packageName?.toString()
                 if (a11yPkg != null && a11yPkg != packageName && a11yPkg != "com.android.systemui") {
-                    val isLauncher = a11yPkg.lowercase().contains("launcher") ||
-                        a11yPkg == "com.miui.home" ||
-                        a11yPkg == "com.mi.android.globallauncher"
-                    val isGame = !isLauncher && selected.contains(a11yPkg)
+                    val isGame = !isLauncherOrSystemPackage(a11yPkg) && selected.contains(a11yPkg)
                     handleForegroundUpdate(a11yPkg, isGame)
                     continue
                 }
 
+                if (usm == null) continue
                 val end = System.currentTimeMillis()
-                val events = usm.queryEvents(end - 6000L, end)
+                val events = usm.queryEvents(end - 5000L, end)
                 val event = UsageEvents.Event()
                 var latestForegroundPkg: String? = null
                 var activeGamePaused = false
@@ -399,16 +409,25 @@ class GameTurboOverlayService : Service() {
                 }
 
                 if (latestForegroundPkg != null && latestForegroundPkg != packageName) {
-                    val isLauncher = latestForegroundPkg.lowercase().contains("launcher") ||
-                        latestForegroundPkg == "com.miui.home" ||
-                        latestForegroundPkg == "com.mi.android.globallauncher"
-                    val isGame = !isLauncher && selected.contains(latestForegroundPkg)
+                    val isGame = !isLauncherOrSystemPackage(latestForegroundPkg) && selected.contains(latestForegroundPkg)
                     handleForegroundUpdate(latestForegroundPkg, isGame)
                 } else if (activeGamePaused && activeGamePackage != null) {
                     handleForegroundUpdate(null, false)
                 }
             }
         }
+    }
+
+    private fun isLauncherOrSystemPackage(pkg: String): Boolean {
+        if (pkg == packageName || pkg == "com.android.systemui" || pkg == "android") return true
+        val lower = pkg.lowercase()
+        return lower.contains("launcher") ||
+            lower == "com.miui.home" ||
+            lower == "com.mi.android.globallauncher" ||
+            lower == "com.android.launcher3" ||
+            lower == "com.google.android.apps.nexuslauncher" ||
+            lower.contains("miui.securitycenter") ||
+            lower.contains("settings")
     }
 
     private fun observeSettings() {
@@ -447,6 +466,7 @@ class GameTurboOverlayService : Service() {
         if (s.crosshairEnabled) showCrosshairOverlay() else dismissCrosshairOverlay()
         if (s.touchGuardEnabled || s.dndEnabled) showTouchGuardOverlays() else dismissTouchGuardOverlays()
     }
+
     private fun createComposeView(content: @Composable () -> Unit): ComposeView {
         return ComposeView(this).apply {
             val owner = MyLifecycleOwner()
@@ -466,7 +486,7 @@ class GameTurboOverlayService : Service() {
     }
 
     private fun showEdgeTrigger() {
-        if (!Settings.canDrawOverlays(this) || edgeTriggerView != null) return
+        if (!Settings.canDrawOverlays(this) || edgeTriggerView != null || activeGamePackage == null) return
         val initialSettings = TurboSettingsStore.state.value
         lastEdgeOnLeft = initialSettings.edgeOnLeft
 
@@ -569,7 +589,7 @@ class GameTurboOverlayService : Service() {
     }
 
     private fun openCompactDrawer() {
-        if (!Settings.canDrawOverlays(this)) return
+        if (!Settings.canDrawOverlays(this) || activeGamePackage == null) return
         if (panelHostView != null) {
             isPanelExpanded.value = true
             SystemTelemetryEngine.startFpsMonitor()
