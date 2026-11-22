@@ -156,9 +156,9 @@ fun CompactSwipeUpSidebar(
     )
 
     val panelShape = if (settings.edgeOnLeft) {
-        RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
+        RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp)
     } else {
-        RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp)
+        RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
     }
 
     val crosshairColors = remember {
@@ -169,13 +169,13 @@ fun CompactSwipeUpSidebar(
         shape = panelShape,
         color = Color.Transparent,
         modifier = Modifier
-            .width(212.dp)
-            .fillMaxHeight(0.72f)
-            .darkNeonGlow(accent, cornerRadius = 18.dp, glowAlpha = 0.52f, strokeWidth = 1.4.dp)
+            .width(248.dp)
+            .fillMaxHeight(0.78f)
+            .darkNeonGlow(accent, cornerRadius = 20.dp, glowAlpha = 0.56f, strokeWidth = 1.5.dp)
             .border(
-                width = 1.2.dp,
+                width = 1.3.dp,
                 brush = Brush.verticalGradient(
-                    listOf(accent, EmeraldGlow.copy(alpha = 0.8f), HeavyPurpleGlow.copy(alpha = 0.85f), accent)
+                    listOf(accent, EmeraldGlow.copy(alpha = 0.85f), HeavyPurpleGlow.copy(alpha = 0.88f), accent)
                 ),
                 shape = panelShape
             )
@@ -233,9 +233,9 @@ fun CompactSwipeUpSidebar(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .padding(horizontal = 10.dp, vertical = 10.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 TelemetryHeaderBlock(
                     settings = settings,
@@ -255,14 +255,14 @@ fun CompactSwipeUpSidebar(
                 Text(
                     text = "PRO GAMING CONTROLS",
                     color = accent,
-                    fontSize = 8.5.sp,
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 0.8.sp
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     IconFeatureTile(
                         icon = Icons.Rounded.CleaningServices,
@@ -303,7 +303,7 @@ fun CompactSwipeUpSidebar(
                             .clip(RoundedCornerShape(10.dp))
                             .background(ObsidianCard.copy(alpha = 0.94f))
                             .border(0.85.dp, BalancedCyanGlow.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
-                            .padding(6.dp),
+                            .padding(7.dp),
                         verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Text(
@@ -345,7 +345,7 @@ fun CompactSwipeUpSidebar(
                                             Text(
                                                 text = filter.label,
                                                 color = if (picked) Color.White else MagicTextSecondary,
-                                                fontSize = 8.5.sp,
+                                                fontSize = 9.sp,
                                                 fontWeight = if (picked) FontWeight.Bold else FontWeight.Medium,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
@@ -356,10 +356,10 @@ fun CompactSwipeUpSidebar(
                             }
                         }
                     }
-                }
+                } 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     IconFeatureTile(
                         icon = Icons.Rounded.DoNotDisturbOn,
@@ -393,7 +393,7 @@ fun CompactSwipeUpSidebar(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     IconFeatureTile(
                         icon = Icons.Rounded.GpsFixed,
@@ -423,21 +423,21 @@ fun CompactSwipeUpSidebar(
 
                 Surface(
                     color = ObsidianCard.copy(alpha = 0.92f),
-                    shape = RoundedCornerShape(9.dp),
-                    border = BorderStroke(0.85.dp, accent.copy(alpha = 0.55f)),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(0.9.dp, accent.copy(alpha = 0.55f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { showMoreSection = !showMoreSection }
                 ) {
                     Row(
-                        modifier = Modifier.padding(vertical = 6.dp, horizontal = 10.dp),
+                        modifier = Modifier.padding(vertical = 7.dp, horizontal = 10.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = if (showMoreSection) "LESS OPTIONS" else "MORE OPTIONS",
                             color = accent,
-                            fontSize = 9.sp,
+                            fontSize = 9.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 0.8.sp
                         )
@@ -446,7 +446,7 @@ fun CompactSwipeUpSidebar(
                             imageVector = if (showMoreSection) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
                             contentDescription = null,
                             tint = accent,
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
@@ -456,10 +456,10 @@ fun CompactSwipeUpSidebar(
                     enter = expandVertically(),
                     exit = shrinkVertically()
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             IconFeatureTile(
                                 icon = Icons.Rounded.Speed,
@@ -689,6 +689,7 @@ fun CompactSwipeUpSidebar(
         }
     }
 }
+
 @Composable
 private fun IconFeatureTile(
     icon: ImageVector,
@@ -699,14 +700,14 @@ private fun IconFeatureTile(
     onClick: () -> Unit
 ) {
     val tileModifier = if (active) {
-        modifier.darkNeonGlow(glowColor, cornerRadius = 11.dp, glowAlpha = 0.42f, strokeWidth = 1.dp)
+        modifier.darkNeonGlow(glowColor, cornerRadius = 12.dp, glowAlpha = 0.44f, strokeWidth = 1.dp)
     } else {
         modifier
     }
 
     Surface(
         color = if (active) glowColor.copy(alpha = 0.18f) else ObsidianCard.copy(alpha = 0.9f),
-        shape = RoundedCornerShape(11.dp),
+        shape = RoundedCornerShape(12.dp),
         border = BorderStroke(
             width = if (active) 1.dp else 0.7.dp,
             color = if (active) glowColor else ObsidianDivider
@@ -715,13 +716,13 @@ private fun IconFeatureTile(
     ) {
         Column(
             modifier = Modifier
-                .padding(vertical = 7.dp, horizontal = 4.dp),
+                .padding(vertical = 8.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(27.dp)
+                    .size(30.dp)
                     .clip(CircleShape)
                     .background(if (active) glowColor.copy(alpha = 0.25f) else ObsidianGreenBg),
                 contentAlignment = Alignment.Center
@@ -730,13 +731,13 @@ private fun IconFeatureTile(
                     imageVector = icon,
                     contentDescription = label,
                     tint = if (active) glowColor else MagicTextSecondary,
-                    modifier = Modifier.size(15.dp)
+                    modifier = Modifier.size(17.dp)
                 )
             }
             Text(
                 text = label,
                 color = if (active) Color.White else MagicTextSecondary,
-                fontSize = 8.5.sp,
+                fontSize = 9.sp,
                 fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -770,27 +771,27 @@ private fun TelemetryHeaderBlock(
                         else -> "GAME MAGIC PRO"
                     },
                     color = accent,
-                    fontSize = 10.sp,
+                    fontSize = 10.5.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 0.9.sp
                 )
                 Text(
                     text = clockText.ifEmpty { "--:--:--" },
                     color = MagicTextPrimary,
-                    fontSize = 11.sp,
+                    fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
             Box(
                 modifier = Modifier
-                    .size(23.dp)
+                    .size(25.dp)
                     .clip(CircleShape)
                     .background(ObsidianCard)
                     .border(0.75.dp, accent.copy(alpha = 0.5f), CircleShape)
                     .clickable { onClose() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close Drawer", tint = MagicTextSecondary, modifier = Modifier.size(13.dp))
+                Icon(Icons.Rounded.Close, contentDescription = "Close Drawer", tint = MagicTextSecondary, modifier = Modifier.size(14.dp))
             }
         }
 
@@ -800,7 +801,7 @@ private fun TelemetryHeaderBlock(
                 .clip(RoundedCornerShape(10.dp))
                 .background(ObsidianGreenBg.copy(alpha = 0.9f))
                 .border(0.85.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                .padding(horizontal = 7.dp, vertical = 5.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -910,7 +911,7 @@ private fun ModeThemePill(
             Text(
                 text = label,
                 color = if (selected) glowColor else MagicTextSecondary,
-                fontSize = 9.sp,
+                fontSize = 9.5.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -921,7 +922,7 @@ private fun ModeThemePill(
 
 @Composable
 private fun MiniStat(text: String, color: Color) {
-    Text(text = text, color = color, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    Text(text = text, color = color, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
 }
 
 @Composable
@@ -971,4 +972,6 @@ private fun MiniPillButton(
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
         )
     }
-} 
+}
+                
+                
