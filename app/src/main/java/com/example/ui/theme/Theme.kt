@@ -5,10 +5,14 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+val ObsidianGreenBg = Color(0xFF070709)
+val RedMagicOrange = Color(0xFFFF551A)
+val RedMagicCrimson = Color(0xFFFF2A3C)
+
 private val RedMagicDarkColors = darkColorScheme(
-    primary = Color(0xFFFF551A),
-    secondary = Color(0xFFFF2A3C),
-    background = Color(0xFF070709),
+    primary = RedMagicOrange,
+    secondary = RedMagicCrimson,
+    background = ObsidianGreenBg,
     surface = Color(0xFF101015),
     onPrimary = Color.White,
     onSecondary = Color.White,
