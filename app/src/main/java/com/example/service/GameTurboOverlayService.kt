@@ -544,9 +544,9 @@ class GameTurboOverlayService : Service() {
                     stopRealScreenRecording(showToast = true)
                 } else {
                     closeSidePanel()
-                    val recordIntent = Intent(this, ScreenRecordActivity::class.java)
-                    recordIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(recordIntent)
+                    val launchIntent = Intent(this, MainActivity::class.java)
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(launchIntent)
                 }
             }
             is MagicSidebarAction.SetPerfMode -> {
