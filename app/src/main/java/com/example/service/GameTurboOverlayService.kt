@@ -370,7 +370,10 @@ class GameTurboOverlayService : Service() {
             } catch (_: Exception) {
             }
         }
-        vmStoreOwner?.clear()
+        try {
+            vmStoreOwner?.viewModelStore?.clear()
+        } catch (_: Exception) {
+        }
         try {
             windowManager.removeView(view)
         } catch (_: Exception) {
