@@ -2,6 +2,7 @@ package com.example.service
 
 import android.Manifest
 import android.app.Activity
+import android.app.ActivityOptions
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,6 +16,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.MediaRecorder
@@ -65,7 +67,7 @@ import com.example.MainActivity
 import com.example.R
 import com.example.core.*
 import com.example.ui.components.CompactSwipeUpSidebar
-import com.example.ui.components.MagicSidebarAction
+import com.example.ui.components.ProSidebarAction
 import com.example.ui.theme.GamingTurboTheme
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -518,9 +520,9 @@ class GameTurboOverlayService : Service() {
         }, 150L)
     }
 
-    private fun handleSidebarAction(action: MagicSidebarAction) {
+    private fun handleSidebarAction(action: ProSidebarAction) {
         when (action) {
-            MagicSidebarAction.TurboBoostNow -> {
+            ProSidebarAction.TurboBoostNow -> {
                 serviceScope.launch {
                     val res = SystemTelemetryEngine.boostMemory(applicationContext, aggressive = false)
                     RedMagicEngine.refreshHardware(applicationContext)
@@ -529,7 +531,15 @@ class GameTurboOverlayService : Service() {
                     boostReadout.value = null
                 }
             }
-            MagicSidebarAction.TakeScreenshot -> {
+            ProSidebarAction.NetworkBoostNow -> {
+                serviceScope.launch {
+                    RedMagicEngine.refreshHardware(applicationContext)
+                    boostReadout.value = "Ping Stabilized (${RedMagicEngine.hardware.value.pingMs} ms)"
+                    delay(2000L)
+                    boostReadout.value = null
+                }
+            }
+            ProSidebarAction.TakeScreenshot -> {
                 closeSidePanel()
                 mainHandler.postDelayed({
                     if (!GameAccessibilityService.triggerSystemScreenshot()) {
@@ -537,7 +547,7 @@ class GameTurboOverlayService : Service() {
                     }
                 }, 200L)
             }
-            MagicSidebarAction.ToggleScreenRecording -> {
+            ProSidebarAction.ToggleScreenRecording -> {
                 if (RedMagicEngine.state.value.isRecording) {
                     stopRealScreenRecording(showToast = true)
                 } else {
@@ -547,28 +557,46 @@ class GameTurboOverlayService : Service() {
                     startActivity(launchIntent)
                 }
             }
-            MagicSidebarAction.CycleFilter -> {
+            ProSidebarAction.CycleFilter -> {
                 val all = RedMagicFilter.entries
                 val next = all[(RedMagicEngine.state.value.filter.ordinal + 1) % all.size]
                 RedMagicEngine.update(applicationContext) { it.copy(filter = next) }
             }
-            is MagicSidebarAction.SetPerfMode -> {
+            is ProSidebarAction.SetPerfMode -> {
                 RedMagicEngine.update(applicationContext) { it.copy(perfMode = action.mode) }
             }
-            is MagicSidebarAction.ToggleBlockAlerts -> {
+            is ProSidebarAction.ToggleBlockAlerts -> {
                 SystemTelemetryEngine.setDndEnabled(applicationContext, action.enabled)
                 RedMagicEngine.update(applicationContext) { it.copy(blockAlerts = action.enabled) }
             }
-            is MagicSidebarAction.ToggleLockControlCenter -> {
+            is ProSidebarAction.ToggleLockControlCenter -> {
                 RedMagicEngine.update(applicationContext) { it.copy(lockControlCenter = action.enabled) }
             }
-            is MagicSidebarAction.ToggleSmallCallBanner -> {
+            is ProSidebarAction.ToggleSmallCallBanner -> {
                 RedMagicEngine.update(applicationContext) { it.copy(smallCallBanner = action.enabled) }
             }
-            is MagicSidebarAction.ToggleBrightnessLock -> {
+            is ProSidebarAction.ToggleBrightnessLock -> {
                 RedMagicEngine.setBrightnessLock(applicationContext, action.enabled)
             }
-            is MagicSidebarAction.ToggleVoiceChanger -> {
+            is ProSidebarAction.ToggleAiIsolation -> {
+                RedMagicEngine.update(applicationContext) { it.copy(aiIsolation = action.enabled) }
+                if (action.enabled) {
+                    serviceScope.launch {
+                        SystemTelemetryEngine.boostMemory(applicationContext, aggressive = false)
+                        boostReadout.value = "AI Isolation Active"
+                        delay(1800L)
+                        boostReadout.value = null
+                    }
+                }
+            }
+            is ProSidebarAction.ToggleMiniFpsCounter -> {
+                RedMagicEngine.update(applicationContext) { it.copy(showMiniFpsCounter = action.enabled) }
+            }
+            is ProSidebarAction.LaunchFloatingApp -> {
+                closeSidePanel()
+                launchQuickFloatingApp(action.pkg)
+            }
+            is ProSidebarAction.ToggleVoiceChanger -> {
                 if (action.enabled) {
                     val ok = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                     if (ok) {
@@ -582,7 +610,35 @@ class GameTurboOverlayService : Service() {
                     RedMagicEngine.update(applicationContext) { it.copy(voiceChanger = false) }
                 }
             }
-            else -> Unit
+            is ProSidebarAction.SetTouchSensitivity -> {
+                RedMagicEngine.update(applicationContext) { it.copy(touchSensitivity = action.value) }
+            }
+            is ProSidebarAction.SetTouchResponse -> {
+                RedMagicEngine.update(applicationContext) { it.copy(touchResponse = action.value) }
+            }
+        }
+    }
+
+    private fun launchQuickFloatingApp(targetPkg: String) {
+        val launchIntent = packageManager.getLaunchIntentForPackage(targetPkg)
+        if (launchIntent == null) {
+            Toast.makeText(this, "App not installed", Toast.LENGTH_SHORT).show()
+            return
+        }
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                val opts = ActivityOptions.makeBasic()
+                val dm = resources.displayMetrics
+                val w = (dm.widthPixels * 0.45f).toInt()
+                val h = (dm.heightPixels * 0.55f).toInt()
+                opts.setLaunchBounds(Rect(60, 120, 60 + w, 120 + h))
+                startActivity(launchIntent, opts.toBundle())
+            } else {
+                startActivity(launchIntent)
+            }
+        } catch (_: Exception) {
+            startActivity(launchIntent)
         }
     }
 
