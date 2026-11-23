@@ -61,32 +61,34 @@ sealed interface ProSidebarAction {
 }
 
 object CyberSoundPlayer {
+    private const val SOFT_VOLUME = 28
+
     fun playModeSound(modeIndex: Int) {
         try {
-            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, SOFT_VOLUME)
             val tone = when (modeIndex) {
                 0 -> ToneGenerator.TONE_PROP_ACK
                 1 -> ToneGenerator.TONE_PROP_BEEP2
-                2 -> ToneGenerator.TONE_CDMA_HIGH_L
-                else -> ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK
+                2 -> ToneGenerator.TONE_PROP_BEEP
+                else -> ToneGenerator.TONE_PROP_ACK
             }
-            tg.startTone(tone, 180)
+            tg.startTone(tone, 110)
         } catch (_: Exception) {
         }
     }
 
     fun playLaunchTurbineSound() {
         try {
-            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
-            tg.startTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 260)
+            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, SOFT_VOLUME)
+            tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 150)
         } catch (_: Exception) {
         }
     }
 
     fun playAppStartupSound() {
         try {
-            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
-            tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 200)
+            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, SOFT_VOLUME)
+            tg.startTone(ToneGenerator.TONE_PROP_ACK, 130)
         } catch (_: Exception) {
         }
     }
@@ -118,7 +120,7 @@ fun CompactSwipeUpSidebar(
     val modeColors = listOf(neonGreen, neonCyan, neonOrange, neonPurple)
     val activeModeColor by animateColorAsState(
         targetValue = modeColors[rmState.perfMode.ordinal % modeColors.size],
-        animationSpec = tween(220),
+        animationSpec = tween(180),
         label = "modeColor"
     )
 
@@ -128,14 +130,15 @@ fun CompactSwipeUpSidebar(
 
     Column(
         modifier = Modifier
-            .width(300.dp)
-            .fillMaxHeight(0.95f)
-            .clip(RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp))
+            .width(276.dp)
+            .fillMaxHeight(0.94f)
+            .padding(start = 10.dp)
+            .clip(RoundedCornerShape(18.dp))
             .background(bgCard)
-            .border(1.6.dp, futuristicBorder, RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp))
-            .padding(12.dp)
+            .border(1.5.dp, futuristicBorder, RoundedCornerShape(18.dp))
+            .padding(11.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(9.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -145,15 +148,17 @@ fun CompactSwipeUpSidebar(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(
                     modifier = Modifier
-                        .size(9.dp)
+                        .size(8.dp)
                         .clip(CircleShape)
                         .background(activeModeColor)
                 )
                 Text(
                     text = "GAME MAGIC • AI CORE",
                     color = textPrimary,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Black
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Box(
@@ -162,9 +167,9 @@ fun CompactSwipeUpSidebar(
                     .background(tileBg)
                     .border(0.9.dp, neonOrange.copy(alpha = 0.75f), RoundedCornerShape(8.dp))
                     .clickable { onClose() }
-                    .padding(horizontal = 9.dp, vertical = 4.dp)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                Text("HIDE", color = neonOrange, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+                Text("HIDE", color = neonOrange, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -174,10 +179,10 @@ fun CompactSwipeUpSidebar(
                 .clip(RoundedCornerShape(12.dp))
                 .background(tileBg)
                 .border(0.9.dp, neonCyan.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
-                .padding(vertical = 8.dp, horizontal = 6.dp),
+                .padding(vertical = 7.dp, horizontal = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            StatBadge("REAL FPS", "$displayFps", neonCyan)
+            StatBadge("FPS", "$displayFps", neonCyan)
             StatBadge("PING", "${hw.pingMs}ms", neonGreen)
             StatBadge("CPU", "${hw.cpuPercent}%", neonGold)
             StatBadge("GPU", "${hw.gpuPercent}%", neonPurple)
@@ -189,19 +194,21 @@ fun CompactSwipeUpSidebar(
                 .clip(RoundedCornerShape(10.dp))
                 .background(
                     Brush.horizontalGradient(
-                        listOf(neonCyan.copy(alpha = 0.25f), neonGreen.copy(alpha = 0.25f))
+                        listOf(neonCyan.copy(alpha = 0.24f), neonGreen.copy(alpha = 0.24f))
                     )
                 )
-                .border(1.2.dp, neonCyan, RoundedCornerShape(10.dp))
+                .border(1.1.dp, neonCyan, RoundedCornerShape(10.dp))
                 .clickable { onAction(ProSidebarAction.FixLagNow) }
-                .padding(vertical = 8.dp, horizontal = 10.dp),
+                .padding(vertical = 7.dp, horizontal = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "⚡ FIX LAG & CLEAR GAME CACHE",
+                text = "⚡ FIX LAG & CLEAR CACHE",
                 color = neonCyan,
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Black
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
 
@@ -215,14 +222,14 @@ fun CompactSwipeUpSidebar(
                     .padding(vertical = 5.dp, horizontal = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(boostReadout, color = neonGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(boostReadout, color = neonGreen, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
             }
         }
 
-        Text("PERFORMANCE ENGINE & POWER GRAPH", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text("PERFORMANCE MODE", color = textMuted, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             RedMagicPerfMode.entries.forEachIndexed { idx, mode ->
                 val selected = rmState.perfMode == mode
@@ -233,7 +240,7 @@ fun CompactSwipeUpSidebar(
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (selected) mColor.copy(alpha = 0.28f) else tileBg)
                         .border(
-                            width = if (selected) 1.3.dp else 0.7.dp,
+                            width = if (selected) 1.2.dp else 0.7.dp,
                             color = if (selected) mColor else Color(0xFF252B3D),
                             shape = RoundedCornerShape(8.dp)
                         )
@@ -241,13 +248,13 @@ fun CompactSwipeUpSidebar(
                             CyberSoundPlayer.playModeSound(idx)
                             onAction(ProSidebarAction.SetPerfMode(mode))
                         }
-                        .padding(vertical = 6.dp),
+                        .padding(vertical = 6.dp, horizontal = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = mode.label,
                         color = if (selected) mColor else textMuted,
-                        fontSize = 9.sp,
+                        fontSize = 8.5.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -262,7 +269,7 @@ fun CompactSwipeUpSidebar(
             accentColor = activeModeColor
         )
 
-        Text("AI SMART GUARD", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text("AI SMART GUARD", color = textMuted, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ToggleTile(
                 modifier = Modifier.weight(1f),
@@ -281,15 +288,15 @@ fun CompactSwipeUpSidebar(
             ) { onAction(ProSidebarAction.ToggleAiIsolation(!rmState.aiIsolation)) }
         }
 
-        Text("VISUAL FILTER & INTENSITY ADJUST", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text("FILTER & INTENSITY", color = textMuted, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .background(tileBg)
                 .border(0.9.dp, neonGold.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 10.dp, vertical = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(horizontal = 9.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -297,10 +304,12 @@ fun CompactSwipeUpSidebar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Filter: ${rmState.filter.label}",
+                    text = rmState.filter.label,
                     color = neonGold,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Box(
                     modifier = Modifier
@@ -308,15 +317,15 @@ fun CompactSwipeUpSidebar(
                         .background(neonGold.copy(alpha = 0.2f))
                         .border(0.8.dp, neonGold, RoundedCornerShape(6.dp))
                         .clickable { onAction(ProSidebarAction.CycleFilter) }
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .padding(horizontal = 7.dp, vertical = 3.dp)
                 ) {
-                    Text("CHANGE FILTER", color = neonGold, fontSize = 8.5.sp, fontWeight = FontWeight.Black)
+                    Text("FILTER", color = neonGold, fontSize = 8.sp, fontWeight = FontWeight.Black)
                 }
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Filter Adjust", color = textPrimary, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
-                Text("${(filterIntensity * 100).toInt()}%", color = neonGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Text("Intensity", color = textPrimary, fontSize = 8.5.sp, fontWeight = FontWeight.SemiBold)
+                Text("${(filterIntensity * 100).toInt()}%", color = neonGold, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
             }
             Slider(
                 value = filterIntensity,
@@ -325,7 +334,7 @@ fun CompactSwipeUpSidebar(
             )
         }
 
-        Text("PRO GAMING TOOLS", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text("PRO GAMING TOOLS", color = textMuted, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ToggleTile(
@@ -435,8 +444,8 @@ fun CompactSwipeUpSidebar(
             ) { onAction(ProSidebarAction.ToggleMiniFpsCounter(!rmState.showMiniFpsCounter)) }
         }
 
-        Text("QUICK FLOATING APPS", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("QUICK FLOATING APPS", color = textMuted, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             QuickAppChip(Modifier.weight(1f), "WhatsApp", neonGreen) {
                 onAction(ProSidebarAction.LaunchFloatingApp("com.whatsapp"))
             }
@@ -454,11 +463,11 @@ fun CompactSwipeUpSidebar(
                 .clip(RoundedCornerShape(12.dp))
                 .background(tileBg)
                 .border(0.8.dp, neonPurple.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 9.dp, vertical = 6.dp)
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Touch Sensitivity", color = textPrimary, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
-                Text("${(rmState.touchSensitivity * 100).toInt()}%", color = neonCyan, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+                Text("Touch Sensitivity", color = textPrimary, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                Text("${(rmState.touchSensitivity * 100).toInt()}%", color = neonCyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
             Slider(
                 value = rmState.touchSensitivity,
@@ -467,8 +476,8 @@ fun CompactSwipeUpSidebar(
             )
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Touch Response", color = textPrimary, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
-                Text("${(rmState.touchResponse * 100).toInt()}%", color = neonOrange, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+                Text("Touch Response", color = textPrimary, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                Text("${(rmState.touchResponse * 100).toInt()}%", color = neonOrange, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
             Slider(
                 value = rmState.touchResponse,
@@ -492,7 +501,7 @@ private fun ModePowerGraphCard(
             2 -> 0.88f
             else -> 1.0f
         },
-        animationSpec = tween(280, easing = FastOutSlowInEasing),
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
         label = "powerLevel"
     )
 
@@ -502,23 +511,25 @@ private fun ModePowerGraphCard(
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xFF0A0F1C))
             .border(1.dp, accentColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 10.dp, vertical = 7.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+            .padding(horizontal = 9.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "BOOST CURVE • ${modeName.uppercase()}",
+                text = "CURVE • ${modeName.uppercase()}",
                 color = accentColor,
-                fontSize = 8.5.sp,
-                fontWeight = FontWeight.Black
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "OUTPUT ${(targetPower * 100).toInt()}%",
+                text = "${(targetPower * 100).toInt()}%",
                 color = Color(0xFFF8FAFC),
-                fontSize = 8.5.sp,
+                fontSize = 8.sp,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -526,7 +537,7 @@ private fun ModePowerGraphCard(
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(36.dp)
+                .height(32.dp)
         ) {
             val w = size.width
             val h = size.height
@@ -568,7 +579,7 @@ private fun ModePowerGraphCard(
             drawPath(
                 path = path,
                 color = accentColor,
-                style = Stroke(width = 3.2f, cap = StrokeCap.Round)
+                style = Stroke(width = 3f, cap = StrokeCap.Round)
             )
         }
     }
@@ -577,8 +588,8 @@ private fun ModePowerGraphCard(
 @Composable
 private fun StatBadge(label: String, value: String, valueColor: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = valueColor, fontSize = 11.sp, fontWeight = FontWeight.Black)
-        Text(label, color = Color(0xFF94A3B8), fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+        Text(value, color = valueColor, fontSize = 10.5.sp, fontWeight = FontWeight.Black)
+        Text(label, color = Color(0xFF94A3B8), fontSize = 8.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -601,15 +612,23 @@ private fun ToggleTile(
                 shape = RoundedCornerShape(10.dp)
             )
             .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 7.dp)
+            .padding(horizontal = 7.dp, vertical = 6.dp)
     ) {
-        Text(title, color = Color(0xFFF8FAFC), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(
+            title,
+            color = Color(0xFFF8FAFC),
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
         Text(
             subtitle,
             color = if (active) accent else Color(0xFF94A3B8),
-            fontSize = 8.5.sp,
+            fontSize = 8.sp,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -627,9 +646,16 @@ private fun QuickAppChip(
             .background(Color(0xFF0F1524))
             .border(0.9.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
             .clickable { onClick() }
-            .padding(vertical = 6.dp),
+            .padding(vertical = 6.dp, horizontal = 3.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text(
+            label,
+            color = accent,
+            fontSize = 8.5.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
