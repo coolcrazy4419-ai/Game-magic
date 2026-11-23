@@ -2,7 +2,6 @@ package com.example.service
 
 import android.Manifest
 import android.app.Activity
-import android.app.ActivityOptions
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -16,7 +15,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
-import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.MediaRecorder
@@ -531,14 +529,6 @@ class GameTurboOverlayService : Service() {
                     boostReadout.value = null
                 }
             }
-            MagicSidebarAction.NetworkBoostNow -> {
-                serviceScope.launch {
-                    RedMagicEngine.refreshHardware(applicationContext)
-                    boostReadout.value = "Ping Stabilized (${RedMagicEngine.hardware.value.pingMs} ms)"
-                    delay(2000L)
-                    boostReadout.value = null
-                }
-            }
             MagicSidebarAction.TakeScreenshot -> {
                 closeSidePanel()
                 mainHandler.postDelayed({
@@ -578,20 +568,6 @@ class GameTurboOverlayService : Service() {
             is MagicSidebarAction.ToggleBrightnessLock -> {
                 RedMagicEngine.setBrightnessLock(applicationContext, action.enabled)
             }
-            is MagicSidebarAction.ToggleAiIsolation -> {
-                RedMagicEngine.update(applicationContext) { it.copy(aiIsolation = action.enabled) }
-                if (action.enabled) {
-                    serviceScope.launch {
-                        SystemTelemetryEngine.boostMemory(applicationContext, aggressive = false)
-                        boostReadout.value = "AI Isolation Active"
-                        delay(1800L)
-                        boostReadout.value = null
-                    }
-                }
-            }
-            is MagicSidebarAction.ToggleMiniFpsCounter -> {
-                RedMagicEngine.update(applicationContext) { it.copy(showMiniFpsCounter = action.enabled) }
-            }
             is MagicSidebarAction.ToggleVoiceChanger -> {
                 if (action.enabled) {
                     val ok = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -605,9 +581,6 @@ class GameTurboOverlayService : Service() {
                     VoiceChangerEngine.stop()
                     RedMagicEngine.update(applicationContext) { it.copy(voiceChanger = false) }
                 }
-            }
-            is MagicSidebarAction.SetTouchSensitivity -> {
-                RedMagicEngine.update(applicationContext) { it.copy(touchSensitivity = action.value) }
             }
             else -> Unit
         }
