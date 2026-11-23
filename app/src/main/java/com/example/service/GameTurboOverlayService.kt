@@ -616,6 +616,7 @@ class GameTurboOverlayService : Service() {
             is MagicSidebarAction.SetTouchResponse -> {
                 RedMagicEngine.update(applicationContext) { it.copy(touchResponse = action.value) }
             }
+            else -> Unit
         }
     }
 
