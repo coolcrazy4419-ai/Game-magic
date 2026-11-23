@@ -83,13 +83,10 @@ object CyberSoundPlayer {
         }
     }
 
-    fun playClickSound(boost: Boolean = false) {
+    fun playAppStartupSound() {
         try {
             val tg = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
-            tg.startTone(
-                if (boost) ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD else ToneGenerator.TONE_PROP_BEEP,
-                120
-            )
+            tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 200)
         } catch (_: Exception) {
         }
     }
@@ -140,7 +137,6 @@ fun CompactSwipeUpSidebar(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
-        // Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -165,17 +161,13 @@ fun CompactSwipeUpSidebar(
                     .clip(RoundedCornerShape(8.dp))
                     .background(tileBg)
                     .border(0.9.dp, neonOrange.copy(alpha = 0.75f), RoundedCornerShape(8.dp))
-                    .clickable {
-                        CyberSoundPlayer.playClickSound(false)
-                        onClose()
-                    }
+                    .clickable { onClose() }
                     .padding(horizontal = 9.dp, vertical = 4.dp)
             ) {
                 Text("HIDE", color = neonOrange, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
             }
         }
 
-        // True Real-Time Telemetry Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -191,7 +183,6 @@ fun CompactSwipeUpSidebar(
             StatBadge("GPU", "${hw.gpuPercent}%", neonPurple)
         }
 
-        // One-Tap Fix Lag Button
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -202,10 +193,7 @@ fun CompactSwipeUpSidebar(
                     )
                 )
                 .border(1.2.dp, neonCyan, RoundedCornerShape(10.dp))
-                .clickable {
-                    CyberSoundPlayer.playClickSound(true)
-                    onAction(ProSidebarAction.FixLagNow)
-                }
+                .clickable { onAction(ProSidebarAction.FixLagNow) }
                 .padding(vertical = 8.dp, horizontal = 10.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -231,7 +219,6 @@ fun CompactSwipeUpSidebar(
             }
         }
 
-        // Performance Modes + Power Graph
         Text("PERFORMANCE ENGINE & POWER GRAPH", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -275,7 +262,6 @@ fun CompactSwipeUpSidebar(
             accentColor = activeModeColor
         )
 
-        // AI Smart Features Section
         Text("AI SMART GUARD", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ToggleTile(
@@ -284,10 +270,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = if (aiFpsGuardEnabled) "AUTO-BOOST" else "OFF",
                 active = aiFpsGuardEnabled,
                 accent = neonCyan
-            ) {
-                CyberSoundPlayer.playClickSound(true)
-                onAction(ProSidebarAction.ToggleAiFpsGuard(!aiFpsGuardEnabled))
-            }
+            ) { onAction(ProSidebarAction.ToggleAiFpsGuard(!aiFpsGuardEnabled)) }
 
             ToggleTile(
                 modifier = Modifier.weight(1f),
@@ -295,13 +278,9 @@ fun CompactSwipeUpSidebar(
                 subtitle = if (rmState.aiIsolation) "LOCKED" else "OFF",
                 active = rmState.aiIsolation,
                 accent = neonPurple
-            ) {
-                CyberSoundPlayer.playClickSound(true)
-                onAction(ProSidebarAction.ToggleAiIsolation(!rmState.aiIsolation))
-            }
+            ) { onAction(ProSidebarAction.ToggleAiIsolation(!rmState.aiIsolation)) }
         }
 
-        // Visual Filter & Intensity Adjust
         Text("VISUAL FILTER & INTENSITY ADJUST", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         Column(
             modifier = Modifier
@@ -328,10 +307,7 @@ fun CompactSwipeUpSidebar(
                         .clip(RoundedCornerShape(6.dp))
                         .background(neonGold.copy(alpha = 0.2f))
                         .border(0.8.dp, neonGold, RoundedCornerShape(6.dp))
-                        .clickable {
-                            CyberSoundPlayer.playClickSound(false)
-                            onAction(ProSidebarAction.CycleFilter)
-                        }
+                        .clickable { onAction(ProSidebarAction.CycleFilter) }
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
                     Text("CHANGE FILTER", color = neonGold, fontSize = 8.5.sp, fontWeight = FontWeight.Black)
@@ -349,7 +325,6 @@ fun CompactSwipeUpSidebar(
             )
         }
 
-        // Pro Gaming Tools (All Previous Features Preserved)
         Text("PRO GAMING TOOLS", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -359,10 +334,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = if (crosshairEnabled) "AIM ON" else "OFF",
                 active = crosshairEnabled,
                 accent = neonOrange
-            ) {
-                CyberSoundPlayer.playClickSound(false)
-                onAction(ProSidebarAction.ToggleCrosshair)
-            }
+            ) { onAction(ProSidebarAction.ToggleCrosshair) }
 
             ToggleTile(
                 modifier = Modifier.weight(1f),
@@ -370,10 +342,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = "SWITCH",
                 active = crosshairEnabled,
                 accent = neonCyan
-            ) {
-                CyberSoundPlayer.playClickSound(false)
-                onAction(ProSidebarAction.CycleCrosshairStyle)
-            }
+            ) { onAction(ProSidebarAction.CycleCrosshairStyle) }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -383,10 +352,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = if (rmState.blockAlerts) "DND ON" else "OFF",
                 active = rmState.blockAlerts,
                 accent = neonOrange
-            ) {
-                CyberSoundPlayer.playClickSound(false)
-                onAction(ProSidebarAction.ToggleBlockAlerts(!rmState.blockAlerts))
-            }
+            ) { onAction(ProSidebarAction.ToggleBlockAlerts(!rmState.blockAlerts)) }
 
             ToggleTile(
                 modifier = Modifier.weight(1f),
@@ -394,10 +360,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = if (rmState.lockControlCenter) "LOCKED" else "OFF",
                 active = rmState.lockControlCenter,
                 accent = neonCyan
-            ) {
-                CyberSoundPlayer.playClickSound(false)
-                onAction(ProSidebarAction.ToggleLockControlCenter(!rmState.lockControlCenter))
-            }
+            ) { onAction(ProSidebarAction.ToggleLockControlCenter(!rmState.lockControlCenter)) }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -407,10 +370,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = if (rmState.smallCallBanner) "MINI" else "OFF",
                 active = rmState.smallCallBanner,
                 accent = neonGreen
-            ) {
-                CyberSoundPlayer.playClickSound(false)
-                onAction(ProSidebarAction.ToggleSmallCallBanner(!rmState.smallCallBanner))
-            }
+            ) { onAction(ProSidebarAction.ToggleSmallCallBanner(!rmState.smallCallBanner)) }
 
             ToggleTile(
                 modifier = Modifier.weight(1f),
@@ -418,10 +378,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = if (rmState.brightnessLock) "FIXED" else "AUTO",
                 active = rmState.brightnessLock,
                 accent = neonGold
-            ) {
-                CyberSoundPlayer.playClickSound(false)
-                onAction(ProSidebarAction.ToggleBrightnessLock(!rmState.brightnessLock))
-            }
+            ) { onAction(ProSidebarAction.ToggleBrightnessLock(!rmState.brightnessLock)) }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -431,10 +388,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = "BOOST NOW",
                 active = true,
                 accent = neonCyan
-            ) {
-                CyberSoundPlayer.playClickSound(true)
-                onAction(ProSidebarAction.TurboBoostNow)
-            }
+            ) { onAction(ProSidebarAction.TurboBoostNow) }
 
             ToggleTile(
                 modifier = Modifier.weight(1f),
@@ -442,10 +396,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = "${hw.pingMs} ms",
                 active = true,
                 accent = neonGreen
-            ) {
-                CyberSoundPlayer.playClickSound(true)
-                onAction(ProSidebarAction.NetworkBoostNow)
-            }
+            ) { onAction(ProSidebarAction.NetworkBoostNow) }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -455,10 +406,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = "CAPTURE",
                 active = false,
                 accent = neonPurple
-            ) {
-                CyberSoundPlayer.playClickSound(false)
-                onAction(ProSidebarAction.TakeScreenshot)
-            }
+            ) { onAction(ProSidebarAction.TakeScreenshot) }
 
             ToggleTile(
                 modifier = Modifier.weight(1f),
@@ -466,10 +414,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = if (rmState.isRecording) "REC ${rmState.recordingSeconds}s" else "MP4",
                 active = rmState.isRecording,
                 accent = neonOrange
-            ) {
-                CyberSoundPlayer.playClickSound(false)
-                onAction(ProSidebarAction.ToggleScreenRecording)
-            }
+            ) { onAction(ProSidebarAction.ToggleScreenRecording) }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -479,10 +424,7 @@ fun CompactSwipeUpSidebar(
                 subtitle = if (rmState.voiceChanger) "ACTIVE" else "OFF",
                 active = rmState.voiceChanger,
                 accent = neonPurple
-            ) {
-                CyberSoundPlayer.playClickSound(false)
-                onAction(ProSidebarAction.ToggleVoiceChanger(!rmState.voiceChanger))
-            }
+            ) { onAction(ProSidebarAction.ToggleVoiceChanger(!rmState.voiceChanger)) }
 
             ToggleTile(
                 modifier = Modifier.weight(1f),
@@ -490,30 +432,22 @@ fun CompactSwipeUpSidebar(
                 subtitle = if (rmState.showMiniFpsCounter) "SHOWN" else "HIDDEN",
                 active = rmState.showMiniFpsCounter,
                 accent = neonGreen
-            ) {
-                CyberSoundPlayer.playClickSound(false)
-                onAction(ProSidebarAction.ToggleMiniFpsCounter(!rmState.showMiniFpsCounter))
-            }
+            ) { onAction(ProSidebarAction.ToggleMiniFpsCounter(!rmState.showMiniFpsCounter)) }
         }
 
-        // Quick Floating Apps
         Text("QUICK FLOATING APPS", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             QuickAppChip(Modifier.weight(1f), "WhatsApp", neonGreen) {
-                CyberSoundPlayer.playClickSound(false)
                 onAction(ProSidebarAction.LaunchFloatingApp("com.whatsapp"))
             }
             QuickAppChip(Modifier.weight(1f), "YouTube", neonOrange) {
-                CyberSoundPlayer.playClickSound(false)
                 onAction(ProSidebarAction.LaunchFloatingApp("com.google.android.youtube"))
             }
             QuickAppChip(Modifier.weight(1f), "Telegram", neonCyan) {
-                CyberSoundPlayer.playClickSound(false)
                 onAction(ProSidebarAction.LaunchFloatingApp("org.telegram.messenger"))
             }
         }
 
-        // Touch Sliders
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -662,40 +596,3 @@ private fun ToggleTile(
             .clip(RoundedCornerShape(10.dp))
             .background(if (active) accent.copy(alpha = 0.18f) else Color(0xFF0F1524))
             .border(
-                width = if (active) 1.2.dp else 0.8.dp,
-                color = if (active) accent else Color(0xFF252B3D),
-                shape = RoundedCornerShape(10.dp)
-            )
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 7.dp)
-    ) {
-        Text(title, color = Color(0xFFF8FAFC), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        Text(
-            subtitle,
-            color = if (active) accent else Color(0xFF94A3B8),
-            fontSize = 8.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
-private fun QuickAppChip(
-    modifier: Modifier = Modifier,
-    label: String,
-    accent: Color,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF0F1524))
-            .border(0.9.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-            .clickable { onClick() }
-            .padding(vertical = 6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(label, color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-    }
-}
