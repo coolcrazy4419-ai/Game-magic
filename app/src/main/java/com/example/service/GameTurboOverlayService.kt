@@ -131,7 +131,11 @@ class GameTurboOverlayService : Service() {
     private val aiFpsGuardEnabled = MutableStateFlow(true)
     private val liveRealFps = MutableStateFlow(60)
 
+    @Volatile
     private var activeGamePackage: String? = null
+    @Volatile
+    private var manualLaunchGraceUntil: Long = 0L
+
     private var monitorJob: Job? = null
     private var telemetryJob: Job? = null
     private var settingsJob: Job? = null
@@ -141,7 +145,6 @@ class GameTurboOverlayService : Service() {
     private var mediaRecorder: MediaRecorder? = null
     private var virtualDisplay: VirtualDisplay? = null
 
-    // True Choreographer Real-Time FPS Tracker
     private var frameCount = 0
     private var lastFpsTimestamp = 0L
     private var fpsTrackingActive = false
@@ -160,7 +163,6 @@ class GameTurboOverlayService : Service() {
                 frameCount = 0
                 lastFpsTimestamp = frameTimeNanos
 
-                // AI Auto-FPS Guard: automatically clears cache if FPS drops sharply
                 if (aiFpsGuardEnabled.value && calculatedFps < 38 && activeGamePackage != null) {
                     serviceScope.launch {
                         SystemTelemetryEngine.boostMemory(applicationContext, aggressive = false)
@@ -184,7 +186,6 @@ class GameTurboOverlayService : Service() {
         mainHandler.post { Choreographer.getInstance().removeFrameCallback(frameCallback) }
     }
 
-    // HyperOS / MIUI Selfie Camera Cutout Edge-Flush Helper (Zero Gap)
     private fun applyCutoutEdgeFlush(params: WindowManager.LayoutParams, isLeftEdge: Boolean = false) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             params.layoutInDisplayCutoutMode =
@@ -239,6 +240,9 @@ class GameTurboOverlayService : Service() {
             ACTION_FOREGROUND_CHANGED -> {
                 val pkg = intent.getStringExtra(EXTRA_PACKAGE_NAME)
                 val isGame = intent.getBooleanExtra(EXTRA_IS_GAME_ACTIVE, false)
+                if (isGame && pkg != null) {
+                    manualLaunchGraceUntil = System.currentTimeMillis() + 6000L
+                }
                 handleForeground(pkg, isGame)
             }
             ACTION_RECORD_PROJECTION -> {
@@ -280,6 +284,15 @@ class GameTurboOverlayService : Service() {
             .build()
     }
 
+    private fun getAllSelectedGames(): Set<String> {
+        val fromStore = TurboSettingsStore.state.value.selectedPackages
+        val fromPrefs = getSharedPreferences("turbo_settings_prefs", Context.MODE_PRIVATE)
+            .getStringSet("selected_packages", emptySet()) ?: emptySet()
+        return (fromStore + fromPrefs)
+            .filterNot { isLauncherOrSystem(it) }
+            .toSet()
+    }
+
     private fun handleForeground(pkg: String?, isGame: Boolean) {
         if (pkg != null && isTransientIgnoredPackage(pkg)) return
         val safeGame = isGame && pkg != null && !isLauncherOrSystem(pkg)
@@ -288,8 +301,14 @@ class GameTurboOverlayService : Service() {
                 activeGamePackage = pkg
                 RedMagicEngine.loadProfile(applicationContext, pkg)
                 onGameEntered(pkg)
+            } else if (edgeTriggerView == null) {
+                mainHandler.post { showEdgePill() }
             }
         } else {
+            // Do not dismiss during manual game launch transition
+            if (System.currentTimeMillis() < manualLaunchGraceUntil && activeGamePackage != null) {
+                return
+            }
             if (activeGamePackage != null || edgeTriggerView != null || panelHostView != null) {
                 activeGamePackage = null
                 RedMagicEngine.loadProfile(applicationContext, null)
@@ -327,7 +346,7 @@ class GameTurboOverlayService : Service() {
         mainHandler.post { hideAllOverlays() }
     }
 
-    // Futuristic Game Launch HUD Animation + Cyber Turbine Sound (Works both from Home Screen & App)
+    // Sound plays ONLY here when Game Launches
     private fun showGameLaunchAnimationHud(pkg: String) {
         if (!Settings.canDrawOverlays(this)) return
         dismissLaunchBanner()
@@ -424,10 +443,8 @@ class GameTurboOverlayService : Service() {
         monitorJob = serviceScope.launch {
             val usm = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             while (isActive) {
-                delay(1400L)
-                val selected = TurboSettingsStore.state.value.selectedPackages
-                    .filterNot { isLauncherOrSystem(it) }
-                    .toSet()
+                delay(1200L)
+                val selected = getAllSelectedGames()
 
                 if (selected.isEmpty()) {
                     if (activeGamePackage != null) handleForeground(null, false)
@@ -547,7 +564,7 @@ class GameTurboOverlayService : Service() {
         }
     }
 
-    // Flush right against screen edge (even next to selfie camera/cutout on HyperOS)
+    // Silent Edge Pill (Zero sound when swiping/opening sidebar)
     private fun showEdgePill() {
         if (!Settings.canDrawOverlays(this) || edgeTriggerView != null || activeGamePackage == null) return
         val params = WindowManager.LayoutParams(
@@ -569,8 +586,8 @@ class GameTurboOverlayService : Service() {
 
             Box(
                 modifier = Modifier
-                    .width(20.dp)
-                    .height(78.dp)
+                    .width(22.dp)
+                    .height(82.dp)
                     .clip(shape)
                     .background(Color(0xF5060911))
                     .border(
@@ -598,24 +615,20 @@ class GameTurboOverlayService : Service() {
                                         }
                                     }
                                 }
-                                if (dragAccumX > 16f) {
+                                if (dragAccumX > 14f) {
                                     dragAccumX = 0f
-                                    CyberSoundPlayer.playClickSound(true)
                                     openSidePanel()
                                 }
                             }
                         )
                     }
-                    .clickable {
-                        CyberSoundPlayer.playClickSound(true)
-                        openSidePanel()
-                    },
+                    .clickable { openSidePanel() },
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
                         .width(3.5.dp)
-                        .height(40.dp)
+                        .height(42.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.verticalGradient(
@@ -862,7 +875,6 @@ class GameTurboOverlayService : Service() {
         }
     }
 
-    // Pro Crosshair Overlay (3 Styles)
     private fun showCrosshairOverlay() {
         if (crosshairOverlayView != null) return
         val params = WindowManager.LayoutParams(
