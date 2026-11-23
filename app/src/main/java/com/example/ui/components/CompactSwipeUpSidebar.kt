@@ -8,8 +8,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -181,76 +179,35 @@ fun CompactSwipeUpSidebar(
 
             ToggleTile(
                 modifier = Modifier.weight(1f),
-                title = "Net Boost",
-                subtitle = "${hw.pingMs} ms",
-                active = false
-            ) { onAction(MagicSidebarAction.NetworkBoostNow) }
-        }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ToggleTile(
-                modifier = Modifier.weight(1f),
                 title = "Screenshot",
                 subtitle = "CAPTURE",
                 active = false
             ) { onAction(MagicSidebarAction.TakeScreenshot) }
+        }
 
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ToggleTile(
                 modifier = Modifier.weight(1f),
                 title = "Record",
                 subtitle = if (rmState.isRecording) "REC ${rmState.recordingSeconds}s" else "MP4",
                 active = rmState.isRecording
             ) { onAction(MagicSidebarAction.ToggleScreenRecording) }
-        }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ToggleTile(
                 modifier = Modifier.weight(1f),
                 title = "Voice FX",
                 subtitle = if (rmState.voiceChanger) "ACTIVE" else "OFF",
                 active = rmState.voiceChanger
             ) { onAction(MagicSidebarAction.ToggleVoiceChanger(!rmState.voiceChanger)) }
+        }
 
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ToggleTile(
                 modifier = Modifier.weight(1f),
                 title = "Game Filter",
                 subtitle = rmState.filter.label,
                 active = rmState.filter.ordinal != 0
             ) { onAction(MagicSidebarAction.CycleFilter) }
-        }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ToggleTile(
-                modifier = Modifier.weight(1f),
-                title = "AI Isolation",
-                subtitle = if (rmState.aiIsolation) "ON" else "OFF",
-                active = rmState.aiIsolation
-            ) { onAction(MagicSidebarAction.ToggleAiIsolation(!rmState.aiIsolation)) }
-
-            ToggleTile(
-                modifier = Modifier.weight(1f),
-                title = "FPS Pill",
-                subtitle = if (rmState.showMiniFpsCounter) "SHOWN" else "HIDDEN",
-                active = rmState.showMiniFpsCounter
-            ) { onAction(MagicSidebarAction.ToggleMiniFpsCounter(!rmState.showMiniFpsCounter)) }
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(tileBg)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Touch Sensitivity", color = textPrimary, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
-                Text("${(rmState.touchSensitivity * 100).toInt()}%", color = accentOrange, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
-            }
-            Slider(
-                value = rmState.touchSensitivity,
-                onValueChange = { onAction(MagicSidebarAction.SetTouchSensitivity(it)) },
-                colors = SliderDefaults.colors(thumbColor = accentOrange, activeTrackColor = accentOrange)
-            )
         }
     }
 }
