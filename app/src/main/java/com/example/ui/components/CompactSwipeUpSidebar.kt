@@ -354,4 +354,4 @@ private fun QuickAppChip(
     ) {
         Text(label, color = Color(0xFFF5F5F7), fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
     }
-}
+} 
