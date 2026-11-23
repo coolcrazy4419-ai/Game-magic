@@ -18,6 +18,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,6 +59,7 @@ import com.example.service.GameTurboOverlayService
 import com.example.ui.components.CyberSoundPlayer
 import com.example.ui.theme.GamingTurboTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 data class InstalledAppItem(
@@ -106,13 +112,20 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun readSavedGames(context: Context): Set<String> {
+    val s1 = context.getSharedPreferences("turbo_settings_prefs", Context.MODE_PRIVATE)
+        .getStringSet("selected_packages", emptySet()) ?: emptySet()
+    val s2 = TurboSettingsStore.state.value.selectedPackages
+    return s1 + s2
+}
+
 private fun updateSelectedGamesSafe(context: Context, updated: Set<String>) {
     val prefsNames = listOf("turbo_settings_prefs", "game_turbo_prefs", "red_magic_prefs")
     for (name in prefsNames) {
         context.getSharedPreferences(name, Context.MODE_PRIVATE)
             .edit()
             .putStringSet("selected_packages", updated)
-            .apply()
+            .commit()
     }
     TurboSettingsStore.init(context.applicationContext)
 }
@@ -124,10 +137,27 @@ private fun CleanGameMagicHome(
     val context = LocalContext.current
     val settingsState by TurboSettingsStore.state.collectAsStateWithLifecycle()
 
-    var localSelected by remember { mutableStateOf(settingsState.selectedPackages) }
+    // Full-screen Futuristic Startup Animation + Sound (ONLY when app opens)
+    var showBootSplash by remember { mutableStateOf(true) }
+    var bootProgressTarget by remember { mutableFloatStateOf(0f) }
+    val animatedProgress by animateFloatAsState(
+        targetValue = bootProgressTarget,
+        animationSpec = tween(1150, easing = FastOutSlowInEasing),
+        label = "bootProgress"
+    )
+
+    LaunchedEffect(Unit) {
+        CyberSoundPlayer.playAppStartupSound()
+        bootProgressTarget = 1f
+        delay(1350L)
+        showBootSplash = false
+    }
+
+    var localSelected by remember { mutableStateOf(readSavedGames(context)) }
     LaunchedEffect(settingsState.selectedPackages) {
-        if (settingsState.selectedPackages.isNotEmpty()) {
-            localSelected = settingsState.selectedPackages
+        val merged = readSavedGames(context)
+        if (merged.isNotEmpty()) {
+            localSelected = merged
         }
     }
 
@@ -186,11 +216,12 @@ private fun CleanGameMagicHome(
         modifier = Modifier
             .fillMaxSize()
             .background(bgDark)
-            .statusBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 14.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 18.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -204,10 +235,7 @@ private fun CleanGameMagicHome(
                         .clip(RoundedCornerShape(12.dp))
                         .background(cardDark)
                         .border(1.dp, neonCyan.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
-                        .clickable {
-                            CyberSoundPlayer.playClickSound(false)
-                            showSettingsDialog = true
-                        }
+                        .clickable { showSettingsDialog = true }
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(
@@ -288,7 +316,6 @@ private fun CleanGameMagicHome(
                 Switch(
                     checked = overlayEnabled,
                     onCheckedChange = { wantEnable ->
-                        CyberSoundPlayer.playClickSound(wantEnable)
                         if (wantEnable) {
                             if (!Settings.canDrawOverlays(context)) {
                                 context.startActivity(
@@ -360,9 +387,14 @@ private fun CleanGameMagicHome(
                                 .background(Color(0xFF151D30))
                                 .border(1.dp, neonCyan.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
                                 .clickable {
-                                    CyberSoundPlayer.playLaunchTurbineSound()
                                     if (!Settings.canDrawOverlays(context)) {
-                                        Toast.makeText(context, "Enable Game Overlay first", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Enable Display Over Other Apps first", Toast.LENGTH_SHORT).show()
+                                        context.startActivity(
+                                            Intent(
+                                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                Uri.parse("package:${context.packageName}")
+                                            )
+                                        )
                                         return@clickable
                                     }
                                     overlayEnabled = true
@@ -418,10 +450,7 @@ private fun CleanGameMagicHome(
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(Color(0xFF121829))
                                 .border(1.dp, neonPurple.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
-                                .clickable {
-                                    CyberSoundPlayer.playClickSound(false)
-                                    showAddGameDialog = true
-                                }
+                                .clickable { showAddGameDialog = true }
                                 .padding(10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
@@ -443,6 +472,73 @@ private fun CleanGameMagicHome(
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        // Futuristic App Opening Splash Animation Overlay
+        AnimatedVisibility(
+            visible = showBootSplash,
+            exit = fadeOut(tween(300))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF04070E)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(horizontal = 36.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(Color(0xFF0E1422))
+                            .border(
+                                width = 2.5.dp,
+                                brush = Brush.linearGradient(listOf(neonCyan, neonPurple, Color(0xFFFF551A))),
+                                shape = RoundedCornerShape(26.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("⚡", fontSize = 44.sp, color = neonCyan)
+                    }
+
+                    Text(
+                        text = "GAME MAGIC",
+                        color = Color.White,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 3.sp
+                    )
+                    Text(
+                        text = "INITIALIZING AI CYBER CORE...",
+                        color = neonCyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF151D30))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(animatedProgress)
+                                .fillMaxHeight()
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.horizontalGradient(listOf(neonCyan, neonPurple, neonGreen))
+                                )
+                        )
                     }
                 }
             }
@@ -485,7 +581,6 @@ private fun CleanGameMagicHome(
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(if (isSelected) neonCyan.copy(alpha = 0.16f) else Color(0xFF151D30))
                                 .clickable {
-                                    CyberSoundPlayer.playClickSound(false)
                                     val updated = if (isSelected) {
                                         localSelected - app.pkg
                                     } else {
