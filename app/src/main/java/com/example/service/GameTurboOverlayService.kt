@@ -751,7 +751,7 @@ class GameTurboOverlayService : Service() {
 
             val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             val proj = mpm.getMediaProjection(resultCode, data)
-            val vd = proj.createVirtualDisplay(
+            val vd = proj?.createVirtualDisplay(
                 "GameTurboRec", width, height, density,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 recorder.surface, null, null
