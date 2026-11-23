@@ -597,11 +597,6 @@ class GameTurboOverlayService : Service() {
                     RedMagicEngine.update(applicationContext) { it.copy(voiceChanger = false) }
                 }
             }
-            MagicSidebarAction.CycleFilter -> {
-                val all = RedMagicFilter.entries
-                val next = all[(RedMagicEngine.state.value.filter.ordinal + 1) % all.size]
-                RedMagicEngine.update(applicationContext) { it.copy(filter = next) }
-            }
             is MagicSidebarAction.SetTouchSensitivity -> {
                 RedMagicEngine.update(applicationContext) { it.copy(touchSensitivity = action.value) }
             }
