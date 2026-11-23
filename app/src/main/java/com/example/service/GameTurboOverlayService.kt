@@ -838,6 +838,13 @@ class GameTurboOverlayService : Service() {
         stopRealScreenRecording(showToast = false)
         serviceScope.cancel()
         mainHandler.post { hideAllOverlays() }
+    
         super.onDestroy()
     }
+    private fun NetworkBoostNow() {
+    }
+
+    private fun SetTouchResponse(enabled: Boolean = true) {
+    }
+    
 }
