@@ -24,25 +24,6 @@ import com.example.core.HardwareSnapshot
 import com.example.core.RedMagicPerfMode
 import com.example.core.RedMagicState
 
-sealed interface MagicSidebarAction {
-    data object TurboBoostNow : MagicSidebarAction
-    data object NetworkBoostNow : MagicSidebarAction
-    data object TakeScreenshot : MagicSidebarAction
-    data object ToggleScreenRecording : MagicSidebarAction
-    data object CycleFilter : MagicSidebarAction
-    data class SetPerfMode(val mode: RedMagicPerfMode) : MagicSidebarAction
-    data class ToggleBlockAlerts(val enabled: Boolean) : MagicSidebarAction
-    data class ToggleLockControlCenter(val enabled: Boolean) : MagicSidebarAction
-    data class ToggleSmallCallBanner(val enabled: Boolean) : MagicSidebarAction
-    data class ToggleBrightnessLock(val enabled: Boolean) : MagicSidebarAction
-    data class ToggleAiIsolation(val enabled: Boolean) : MagicSidebarAction
-    data class ToggleMiniFpsCounter(val enabled: Boolean) : MagicSidebarAction
-    data class ToggleVoiceChanger(val enabled: Boolean) : MagicSidebarAction
-    data class LaunchFloatingApp(val pkg: String) : MagicSidebarAction
-    data class SetTouchSensitivity(val value: Float) : MagicSidebarAction
-    data class SetTouchResponse(val value: Float) : MagicSidebarAction
-}
-
 @Composable
 fun CompactSwipeUpSidebar(
     rmState: RedMagicState,
@@ -254,19 +235,6 @@ fun CompactSwipeUpSidebar(
             ) { onAction(MagicSidebarAction.ToggleMiniFpsCounter(!rmState.showMiniFpsCounter)) }
         }
 
-        Text("QUICK FLOATING APPS", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            QuickAppChip(Modifier.weight(1f), "WhatsApp") {
-                onAction(MagicSidebarAction.LaunchFloatingApp("com.whatsapp"))
-            }
-            QuickAppChip(Modifier.weight(1f), "YouTube") {
-                onAction(MagicSidebarAction.LaunchFloatingApp("com.google.android.youtube"))
-            }
-            QuickAppChip(Modifier.weight(1f), "Telegram") {
-                onAction(MagicSidebarAction.LaunchFloatingApp("org.telegram.messenger"))
-            }
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -281,16 +249,6 @@ fun CompactSwipeUpSidebar(
             Slider(
                 value = rmState.touchSensitivity,
                 onValueChange = { onAction(MagicSidebarAction.SetTouchSensitivity(it)) },
-                colors = SliderDefaults.colors(thumbColor = accentOrange, activeTrackColor = accentOrange)
-            )
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Touch Response", color = textPrimary, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
-                Text("${(rmState.touchResponse * 100).toInt()}%", color = accentOrange, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
-            }
-            Slider(
-                value = rmState.touchResponse,
-                onValueChange = { onAction(MagicSidebarAction.SetTouchResponse(it)) },
                 colors = SliderDefaults.colors(thumbColor = accentOrange, activeTrackColor = accentOrange)
             )
         }
@@ -334,24 +292,5 @@ private fun ToggleTile(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1
         )
-    }
-}
-
-@Composable
-private fun QuickAppChip(
-    modifier: Modifier = Modifier,
-    label: String,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF15151C))
-            .border(0.8.dp, Color(0xFF2B2B38), RoundedCornerShape(8.dp))
-            .clickable { onClick() }
-            .padding(vertical = 6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(label, color = Color(0xFFF5F5F7), fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
     }
 }
