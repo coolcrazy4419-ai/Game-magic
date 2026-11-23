@@ -531,6 +531,14 @@ class GameTurboOverlayService : Service() {
                     boostReadout.value = null
                 }
             }
+            MagicSidebarAction.NetworkBoostNow -> {
+                serviceScope.launch {
+                    RedMagicEngine.refreshHardware(applicationContext)
+                    boostReadout.value = "Ping Stabilized (${RedMagicEngine.hardware.value.pingMs} ms)"
+                    delay(2000L)
+                    boostReadout.value = null
+                }
+            }
             MagicSidebarAction.TakeScreenshot -> {
                 closeSidePanel()
                 mainHandler.postDelayed({
@@ -548,6 +556,11 @@ class GameTurboOverlayService : Service() {
                     launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     startActivity(launchIntent)
                 }
+            }
+            MagicSidebarAction.CycleFilter -> {
+                val all = RedMagicFilter.entries
+                val next = all[(RedMagicEngine.state.value.filter.ordinal + 1) % all.size]
+                RedMagicEngine.update(applicationContext) { it.copy(filter = next) }
             }
             is MagicSidebarAction.SetPerfMode -> {
                 RedMagicEngine.update(applicationContext) { it.copy(perfMode = action.mode) }
@@ -600,7 +613,9 @@ class GameTurboOverlayService : Service() {
             is MagicSidebarAction.SetTouchSensitivity -> {
                 RedMagicEngine.update(applicationContext) { it.copy(touchSensitivity = action.value) }
             }
-            else -> Unit
+            is MagicSidebarAction.SetTouchResponse -> {
+                RedMagicEngine.update(applicationContext) { it.copy(touchResponse = action.value) }
+            }
         }
     }
 
