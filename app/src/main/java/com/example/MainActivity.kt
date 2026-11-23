@@ -1,7 +1,6 @@
 package com.example
 
 import android.Manifest
-import android.app.Activity
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
@@ -107,12 +106,30 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun updateSelectedGamesSafe(context: Context, updated: Set<String>) {
+    val prefsNames = listOf("turbo_settings_prefs", "game_turbo_prefs", "red_magic_prefs")
+    for (name in prefsNames) {
+        context.getSharedPreferences(name, Context.MODE_PRIVATE)
+            .edit()
+            .putStringSet("selected_packages", updated)
+            .apply()
+    }
+    TurboSettingsStore.init(context.applicationContext)
+}
+
 @Composable
 private fun CleanGameMagicHome(
     onRequestRecord: () -> Unit
 ) {
     val context = LocalContext.current
     val settingsState by TurboSettingsStore.state.collectAsStateWithLifecycle()
+
+    var localSelected by remember { mutableStateOf(settingsState.selectedPackages) }
+    LaunchedEffect(settingsState.selectedPackages) {
+        if (settingsState.selectedPackages.isNotEmpty()) {
+            localSelected = settingsState.selectedPackages
+        }
+    }
 
     var overlayEnabled by remember { mutableStateOf(GameTurboOverlayService.isRunning || Settings.canDrawOverlays(context)) }
     var showAddGameDialog by remember { mutableStateOf(false) }
@@ -135,7 +152,7 @@ private fun CleanGameMagicHome(
             pm.getInstalledApplications(PackageManager.GET_META_DATA)
                 .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 && it.packageName != context.packageName }
                 .mapNotNull { appInfo ->
-                    val launch = pm.getLaunchIntentForPackage(appInfo.packageName) ?: return@mapNotNull null
+                    pm.getLaunchIntentForPackage(appInfo.packageName) ?: return@mapNotNull null
                     InstalledAppItem(
                         name = pm.getApplicationLabel(appInfo).toString(),
                         pkg = appInfo.packageName,
@@ -161,8 +178,8 @@ private fun CleanGameMagicHome(
     val bgDark = Color(0xFF060911)
     val cardDark = Color(0xFF0E1422)
 
-    val addedGames = remember(installedApps, settingsState.selectedPackages) {
-        installedApps.filter { settingsState.selectedPackages.contains(it.pkg) }
+    val addedGames = remember(installedApps, localSelected) {
+        installedApps.filter { localSelected.contains(it.pkg) }
     }
 
     Box(
@@ -177,7 +194,6 @@ private fun CleanGameMagicHome(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Top Bar with Settings Icon Only
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -203,7 +219,6 @@ private fun CleanGameMagicHome(
                 }
             }
 
-            // Glowing Cyber Shield Emblem + Title
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -242,7 +257,6 @@ private fun CleanGameMagicHome(
                 )
             }
 
-            // Master Game Overlay Switch Card
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -305,7 +319,6 @@ private fun CleanGameMagicHome(
                 )
             }
 
-            // My Games Section
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -399,7 +412,6 @@ private fun CleanGameMagicHome(
                         }
                     }
 
-                    // + Add Game Tile
                     item {
                         Column(
                             modifier = Modifier
@@ -437,7 +449,6 @@ private fun CleanGameMagicHome(
         }
     }
 
-    // Add / Remove Games Dialog
     if (showAddGameDialog) {
         Dialog(onDismissRequest = { showAddGameDialog = false }) {
             Column(
@@ -467,7 +478,7 @@ private fun CleanGameMagicHome(
 
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(installedApps, key = { it.pkg }) { app ->
-                        val isSelected = settingsState.selectedPackages.contains(app.pkg)
+                        val isSelected = localSelected.contains(app.pkg)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -476,11 +487,12 @@ private fun CleanGameMagicHome(
                                 .clickable {
                                     CyberSoundPlayer.playClickSound(false)
                                     val updated = if (isSelected) {
-                                        settingsState.selectedPackages - app.pkg
+                                        localSelected - app.pkg
                                     } else {
-                                        settingsState.selectedPackages + app.pkg
+                                        localSelected + app.pkg
                                     }
-                                    TurboSettingsStore.setSelectedPackages(context, updated)
+                                    localSelected = updated
+                                    updateSelectedGamesSafe(context, updated)
                                 }
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -507,7 +519,6 @@ private fun CleanGameMagicHome(
         }
     }
 
-    // Simple Clean Settings Dialog
     if (showSettingsDialog) {
         val hasUsage = hasUsageStatsPermission(context)
         val hasOverlay = Settings.canDrawOverlays(context)
