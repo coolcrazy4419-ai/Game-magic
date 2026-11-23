@@ -596,3 +596,40 @@ private fun ToggleTile(
             .clip(RoundedCornerShape(10.dp))
             .background(if (active) accent.copy(alpha = 0.18f) else Color(0xFF0F1524))
             .border(
+                width = if (active) 1.2.dp else 0.8.dp,
+                color = if (active) accent else Color(0xFF252B3D),
+                shape = RoundedCornerShape(10.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 7.dp)
+    ) {
+        Text(title, color = Color(0xFFF8FAFC), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(
+            subtitle,
+            color = if (active) accent else Color(0xFF94A3B8),
+            fontSize = 8.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun QuickAppChip(
+    modifier: Modifier = Modifier,
+    label: String,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF0F1524))
+            .border(0.9.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+    }
+}
