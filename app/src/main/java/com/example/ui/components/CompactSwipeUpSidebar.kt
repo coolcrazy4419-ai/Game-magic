@@ -8,6 +8,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,13 +24,32 @@ import com.example.core.HardwareSnapshot
 import com.example.core.RedMagicPerfMode
 import com.example.core.RedMagicState
 
+sealed interface ProSidebarAction {
+    data object TurboBoostNow : ProSidebarAction
+    data object NetworkBoostNow : ProSidebarAction
+    data object TakeScreenshot : ProSidebarAction
+    data object ToggleScreenRecording : ProSidebarAction
+    data object CycleFilter : ProSidebarAction
+    data class SetPerfMode(val mode: RedMagicPerfMode) : ProSidebarAction
+    data class ToggleBlockAlerts(val enabled: Boolean) : ProSidebarAction
+    data class ToggleLockControlCenter(val enabled: Boolean) : ProSidebarAction
+    data class ToggleSmallCallBanner(val enabled: Boolean) : ProSidebarAction
+    data class ToggleBrightnessLock(val enabled: Boolean) : ProSidebarAction
+    data class ToggleAiIsolation(val enabled: Boolean) : ProSidebarAction
+    data class ToggleMiniFpsCounter(val enabled: Boolean) : ProSidebarAction
+    data class ToggleVoiceChanger(val enabled: Boolean) : ProSidebarAction
+    data class LaunchFloatingApp(val pkg: String) : ProSidebarAction
+    data class SetTouchSensitivity(val value: Float) : ProSidebarAction
+    data class SetTouchResponse(val value: Float) : ProSidebarAction
+}
+
 @Composable
 fun CompactSwipeUpSidebar(
     rmState: RedMagicState,
     hw: HardwareSnapshot,
     boostReadout: String?,
     onClose: () -> Unit,
-    onAction: (MagicSidebarAction) -> Unit
+    onAction: (ProSidebarAction) -> Unit
 ) {
     val bgCard = Color(0xF20B0B0E)
     val tileBg = Color(0xFF15151C)
@@ -119,7 +140,7 @@ fun CompactSwipeUpSidebar(
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (selected) accentOrange else tileBg)
-                        .clickable { onAction(MagicSidebarAction.SetPerfMode(mode)) }
+                        .clickable { onAction(ProSidebarAction.SetPerfMode(mode)) }
                         .padding(vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -143,14 +164,14 @@ fun CompactSwipeUpSidebar(
                 title = "Block Alerts",
                 subtitle = if (rmState.blockAlerts) "DND ON" else "OFF",
                 active = rmState.blockAlerts
-            ) { onAction(MagicSidebarAction.ToggleBlockAlerts(!rmState.blockAlerts)) }
+            ) { onAction(ProSidebarAction.ToggleBlockAlerts(!rmState.blockAlerts)) }
 
             ToggleTile(
                 modifier = Modifier.weight(1f),
                 title = "Lock Shade",
                 subtitle = if (rmState.lockControlCenter) "LOCKED" else "OFF",
                 active = rmState.lockControlCenter
-            ) { onAction(MagicSidebarAction.ToggleLockControlCenter(!rmState.lockControlCenter)) }
+            ) { onAction(ProSidebarAction.ToggleLockControlCenter(!rmState.lockControlCenter)) }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -159,14 +180,14 @@ fun CompactSwipeUpSidebar(
                 title = "Call Banner",
                 subtitle = if (rmState.smallCallBanner) "MINI" else "OFF",
                 active = rmState.smallCallBanner
-            ) { onAction(MagicSidebarAction.ToggleSmallCallBanner(!rmState.smallCallBanner)) }
+            ) { onAction(ProSidebarAction.ToggleSmallCallBanner(!rmState.smallCallBanner)) }
 
             ToggleTile(
                 modifier = Modifier.weight(1f),
                 title = "Bright Lock",
                 subtitle = if (rmState.brightnessLock) "FIXED" else "AUTO",
                 active = rmState.brightnessLock
-            ) { onAction(MagicSidebarAction.ToggleBrightnessLock(!rmState.brightnessLock)) }
+            ) { onAction(ProSidebarAction.ToggleBrightnessLock(!rmState.brightnessLock)) }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -175,39 +196,103 @@ fun CompactSwipeUpSidebar(
                 title = "Clean RAM",
                 subtitle = "BOOST NOW",
                 active = false
-            ) { onAction(MagicSidebarAction.TurboBoostNow) }
+            ) { onAction(ProSidebarAction.TurboBoostNow) }
 
+            ToggleTile(
+                modifier = Modifier.weight(1f),
+                title = "Net Boost",
+                subtitle = "${hw.pingMs} ms",
+                active = false
+            ) { onAction(ProSidebarAction.NetworkBoostNow) }
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ToggleTile(
                 modifier = Modifier.weight(1f),
                 title = "Screenshot",
                 subtitle = "CAPTURE",
                 active = false
-            ) { onAction(MagicSidebarAction.TakeScreenshot) }
-        }
+            ) { onAction(ProSidebarAction.TakeScreenshot) }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ToggleTile(
                 modifier = Modifier.weight(1f),
                 title = "Record",
                 subtitle = if (rmState.isRecording) "REC ${rmState.recordingSeconds}s" else "MP4",
                 active = rmState.isRecording
-            ) { onAction(MagicSidebarAction.ToggleScreenRecording) }
-
-            ToggleTile(
-                modifier = Modifier.weight(1f),
-                title = "Voice FX",
-                subtitle = if (rmState.voiceChanger) "ACTIVE" else "OFF",
-                active = rmState.voiceChanger
-            ) { onAction(MagicSidebarAction.ToggleVoiceChanger(!rmState.voiceChanger)) }
+            ) { onAction(ProSidebarAction.ToggleScreenRecording) }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ToggleTile(
                 modifier = Modifier.weight(1f),
+                title = "Voice FX",
+                subtitle = if (rmState.voiceChanger) "ACTIVE" else "OFF",
+                active = rmState.voiceChanger
+            ) { onAction(ProSidebarAction.ToggleVoiceChanger(!rmState.voiceChanger)) }
+
+            ToggleTile(
+                modifier = Modifier.weight(1f),
                 title = "Game Filter",
                 subtitle = rmState.filter.label,
                 active = rmState.filter.ordinal != 0
-            ) { onAction(MagicSidebarAction.CycleFilter) }
+            ) { onAction(ProSidebarAction.CycleFilter) }
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ToggleTile(
+                modifier = Modifier.weight(1f),
+                title = "AI Isolation",
+                subtitle = if (rmState.aiIsolation) "ON" else "OFF",
+                active = rmState.aiIsolation
+            ) { onAction(ProSidebarAction.ToggleAiIsolation(!rmState.aiIsolation)) }
+
+            ToggleTile(
+                modifier = Modifier.weight(1f),
+                title = "FPS Pill",
+                subtitle = if (rmState.showMiniFpsCounter) "SHOWN" else "HIDDEN",
+                active = rmState.showMiniFpsCounter
+            ) { onAction(ProSidebarAction.ToggleMiniFpsCounter(!rmState.showMiniFpsCounter)) }
+        }
+
+        Text("QUICK FLOATING APPS", color = textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            QuickAppChip(Modifier.weight(1f), "WhatsApp") {
+                onAction(ProSidebarAction.LaunchFloatingApp("com.whatsapp"))
+            }
+            QuickAppChip(Modifier.weight(1f), "YouTube") {
+                onAction(ProSidebarAction.LaunchFloatingApp("com.google.android.youtube"))
+            }
+            QuickAppChip(Modifier.weight(1f), "Telegram") {
+                onAction(ProSidebarAction.LaunchFloatingApp("org.telegram.messenger"))
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(tileBg)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Touch Sensitivity", color = textPrimary, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
+                Text("${(rmState.touchSensitivity * 100).toInt()}%", color = accentOrange, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+            }
+            Slider(
+                value = rmState.touchSensitivity,
+                onValueChange = { onAction(ProSidebarAction.SetTouchSensitivity(it)) },
+                colors = SliderDefaults.colors(thumbColor = accentOrange, activeTrackColor = accentOrange)
+            )
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Touch Response", color = textPrimary, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
+                Text("${(rmState.touchResponse * 100).toInt()}%", color = accentOrange, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+            }
+            Slider(
+                value = rmState.touchResponse,
+                onValueChange = { onAction(ProSidebarAction.SetTouchResponse(it)) },
+                colors = SliderDefaults.colors(thumbColor = accentOrange, activeTrackColor = accentOrange)
+            )
         }
     }
 }
@@ -249,5 +334,24 @@ private fun ToggleTile(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1
         )
+    }
+}
+
+@Composable
+private fun QuickAppChip(
+    modifier: Modifier = Modifier,
+    label: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF15151C))
+            .border(0.8.dp, Color(0xFF2B2B38), RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = Color(0xFFF5F5F7), fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
     }
 }
