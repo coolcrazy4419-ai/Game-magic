@@ -23,6 +23,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,6 +41,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -86,6 +88,16 @@ class MainActivity : ComponentActivity() {
         TurboSettingsStore.init(applicationContext)
         RedMagicEngine.init(applicationContext)
 
+        // Ensure no game overlay shows on MainActivity home screen
+        if (Settings.canDrawOverlays(applicationContext)) {
+            val stopOverlay = Intent(applicationContext, GameTurboOverlayService::class.java).apply {
+                action = GameTurboOverlayService.ACTION_FOREGROUND_CHANGED
+                putExtra(GameTurboOverlayService.EXTRA_PACKAGE_NAME, packageName)
+                putExtra(GameTurboOverlayService.EXTRA_IS_GAME_ACTIVE, false)
+            }
+            startService(stopOverlay)
+        }
+
         if (intent?.getBooleanExtra("START_RECORDING", false) == true) {
             requestScreenCapture()
         }
@@ -130,6 +142,18 @@ private fun updateSelectedGamesSafe(context: Context, updated: Set<String>) {
     TurboSettingsStore.init(context.applicationContext)
 }
 
+private fun readHideAddedOnHome(context: Context): Boolean {
+    return context.getSharedPreferences("turbo_settings_prefs", Context.MODE_PRIVATE)
+        .getBoolean("hide_added_games_on_home", false)
+}
+
+private fun saveHideAddedOnHome(context: Context, hide: Boolean) {
+    context.getSharedPreferences("turbo_settings_prefs", Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean("hide_added_games_on_home", hide)
+        .commit()
+}
+
 @Composable
 private fun CleanGameMagicHome(
     onRequestRecord: () -> Unit
@@ -137,23 +161,24 @@ private fun CleanGameMagicHome(
     val context = LocalContext.current
     val settingsState by TurboSettingsStore.state.collectAsStateWithLifecycle()
 
-    // Full-screen Futuristic Startup Animation + Sound (ONLY when app opens)
     var showBootSplash by remember { mutableStateOf(true) }
     var bootProgressTarget by remember { mutableFloatStateOf(0f) }
     val animatedProgress by animateFloatAsState(
         targetValue = bootProgressTarget,
-        animationSpec = tween(1150, easing = FastOutSlowInEasing),
+        animationSpec = tween(1050, easing = FastOutSlowInEasing),
         label = "bootProgress"
     )
 
     LaunchedEffect(Unit) {
         CyberSoundPlayer.playAppStartupSound()
         bootProgressTarget = 1f
-        delay(1350L)
+        delay(1200L)
         showBootSplash = false
     }
 
     var localSelected by remember { mutableStateOf(readSavedGames(context)) }
+    var hideAddedOnHome by remember { mutableStateOf(readHideAddedOnHome(context)) }
+
     LaunchedEffect(settingsState.selectedPackages) {
         val merged = readSavedGames(context)
         if (merged.isNotEmpty()) {
@@ -161,7 +186,7 @@ private fun CleanGameMagicHome(
         }
     }
 
-    var overlayEnabled by remember { mutableStateOf(GameTurboOverlayService.isRunning || Settings.canDrawOverlays(context)) }
+    var overlayEnabled by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var showAddGameDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var installedApps by remember { mutableStateOf<List<InstalledAppItem>>(emptyList()) }
@@ -193,23 +218,15 @@ private fun CleanGameMagicHome(
         }
     }
 
-    LaunchedEffect(overlayEnabled) {
-        if (overlayEnabled && Settings.canDrawOverlays(context)) {
-            val startIntent = Intent(context, GameTurboOverlayService::class.java).apply {
-                action = GameTurboOverlayService.ACTION_START
-            }
-            ContextCompat.startForegroundService(context, startIntent)
-        }
-    }
-
     val neonCyan = Color(0xFF00E5FF)
     val neonPurple = Color(0xFFD500F9)
     val neonGreen = Color(0xFF00E676)
     val bgDark = Color(0xFF060911)
-    val cardDark = Color(0xFF0E1422)
+    val cardDark = Color(0xF00E1422)
 
-    val addedGames = remember(installedApps, localSelected) {
-        installedApps.filter { localSelected.contains(it.pkg) }
+    val visibleHomeGames = remember(installedApps, localSelected, hideAddedOnHome) {
+        if (hideAddedOnHome) emptyList()
+        else installedApps.filter { localSelected.contains(it.pkg) }
     }
 
     Box(
@@ -217,13 +234,47 @@ private fun CleanGameMagicHome(
             .fillMaxSize()
             .background(bgDark)
     ) {
+        // Lightweight Glowing Cyber Grid Background Effect
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val step = 72f
+            val gridColor = Color(0xFF00E5FF).copy(alpha = 0.06f)
+            var x = 0f
+            while (x <= size.width) {
+                drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                x += step
+            }
+            var y = 0f
+            while (y <= size.height) {
+                drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                y += step
+            }
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFF00E5FF).copy(alpha = 0.14f), Color.Transparent),
+                    center = Offset(size.width * 0.5f, size.height * 0.22f),
+                    radius = size.minDimension * 0.55f
+                ),
+                radius = size.minDimension * 0.55f,
+                center = Offset(size.width * 0.5f, size.height * 0.22f)
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFFD500F9).copy(alpha = 0.12f), Color.Transparent),
+                    center = Offset(size.width * 0.8f, size.height * 0.78f),
+                    radius = size.minDimension * 0.5f
+                ),
+                radius = size.minDimension * 0.5f,
+                center = Offset(size.width * 0.8f, size.height * 0.78f)
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .padding(horizontal = 18.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -234,7 +285,7 @@ private fun CleanGameMagicHome(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
                         .background(cardDark)
-                        .border(1.dp, neonCyan.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                        .border(1.dp, neonCyan.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                         .clickable { showSettingsDialog = true }
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
@@ -249,11 +300,11 @@ private fun CleanGameMagicHome(
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(72.dp)
+                        .size(70.dp)
                         .clip(RoundedCornerShape(20.dp))
                         .background(cardDark)
                         .border(
@@ -263,11 +314,7 @@ private fun CleanGameMagicHome(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "⚡",
-                        fontSize = 32.sp,
-                        color = neonCyan
-                    )
+                    Text("⚡", fontSize = 30.sp, color = neonCyan)
                 }
 
                 Text(
@@ -279,12 +326,13 @@ private fun CleanGameMagicHome(
                 )
                 Text(
                     text = "AI CYBER ENGINE • ZERO LAG OVERLAY",
-                    color = neonCyan.copy(alpha = 0.8f),
+                    color = neonCyan.copy(alpha = 0.85f),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
+            // Master Game Overlay Switch
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -295,7 +343,7 @@ private fun CleanGameMagicHome(
                         color = if (overlayEnabled) neonCyan else Color(0xFF1E293B),
                         shape = RoundedCornerShape(16.dp)
                     )
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -303,13 +351,13 @@ private fun CleanGameMagicHome(
                     Text(
                         text = "Game Overlay",
                         color = Color.White,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (overlayEnabled) "Active • Only in Added Games" else "Disabled",
+                        text = if (overlayEnabled) "Ready • In-Game Slide Only" else "Disabled",
                         color = if (overlayEnabled) neonGreen else Color(0xFF94A3B8),
-                        fontSize = 11.sp
+                        fontSize = 10.5.sp
                     )
                 }
 
@@ -346,6 +394,7 @@ private fun CleanGameMagicHome(
                 )
             }
 
+            // My Games Section + Hide Added Games on Home Screen Toggle
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -354,7 +403,7 @@ private fun CleanGameMagicHome(
                     .background(cardDark)
                     .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(18.dp))
                     .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -362,16 +411,35 @@ private fun CleanGameMagicHome(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "My Games (${addedGames.size})",
+                        text = "My Games (${localSelected.size})",
                         color = Color.White,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = "Tap game to Boost & Launch",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 10.5.sp
-                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = if (hideAddedOnHome) "Hidden on Home" else "Hide on Home",
+                            color = if (hideAddedOnHome) neonPurple else Color(0xFF94A3B8),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Switch(
+                            checked = hideAddedOnHome,
+                            onCheckedChange = { checked ->
+                                hideAddedOnHome = checked
+                                saveHideAddedOnHome(context, checked)
+                            },
+                            modifier = Modifier.height(28.dp),
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = neonPurple
+                            )
+                        )
+                    }
                 }
 
                 LazyVerticalGrid(
@@ -380,7 +448,7 @@ private fun CleanGameMagicHome(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(addedGames, key = { it.pkg }) { game ->
+                    items(visibleHomeGames, key = { it.pkg }) { game ->
                         Column(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(14.dp))
@@ -477,10 +545,10 @@ private fun CleanGameMagicHome(
             }
         }
 
-        // Futuristic App Opening Splash Animation Overlay
+        // App Open Splash Animation
         AnimatedVisibility(
             visible = showBootSplash,
-            exit = fadeOut(tween(300))
+            exit = fadeOut(tween(260))
         ) {
             Box(
                 modifier = Modifier
@@ -490,37 +558,36 @@ private fun CleanGameMagicHome(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                     modifier = Modifier.padding(horizontal = 36.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(96.dp)
-                            .clip(RoundedCornerShape(26.dp))
+                            .size(92.dp)
+                            .clip(RoundedCornerShape(24.dp))
                             .background(Color(0xFF0E1422))
                             .border(
-                                width = 2.5.dp,
+                                width = 2.dp,
                                 brush = Brush.linearGradient(listOf(neonCyan, neonPurple, Color(0xFFFF551A))),
-                                shape = RoundedCornerShape(26.dp)
+                                shape = RoundedCornerShape(24.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("⚡", fontSize = 44.sp, color = neonCyan)
+                        Text("⚡", fontSize = 42.sp, color = neonCyan)
                     }
 
                     Text(
                         text = "GAME MAGIC",
                         color = Color.White,
-                        fontSize = 26.sp,
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Black,
-                        letterSpacing = 3.sp
+                        letterSpacing = 2.5.sp
                     )
                     Text(
-                        text = "INITIALIZING AI CYBER CORE...",
+                        text = "INITIALIZING AI CYBER ENGINE...",
                         color = neonCyan,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold
                     )
 
                     Box(
