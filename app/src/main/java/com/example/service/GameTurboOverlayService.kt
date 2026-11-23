@@ -592,10 +592,6 @@ class GameTurboOverlayService : Service() {
             is MagicSidebarAction.ToggleMiniFpsCounter -> {
                 RedMagicEngine.update(applicationContext) { it.copy(showMiniFpsCounter = action.enabled) }
             }
-            is MagicSidebarAction.LaunchFloatingApp -> {
-                closeSidePanel()
-                launchQuickFloatingApp(action.pkg)
-            }
             is MagicSidebarAction.ToggleVoiceChanger -> {
                 if (action.enabled) {
                     val ok = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -613,32 +609,7 @@ class GameTurboOverlayService : Service() {
             is MagicSidebarAction.SetTouchSensitivity -> {
                 RedMagicEngine.update(applicationContext) { it.copy(touchSensitivity = action.value) }
             }
-            is MagicSidebarAction.SetTouchResponse -> {
-                RedMagicEngine.update(applicationContext) { it.copy(touchResponse = action.value) }
-            }
-        }
-    }
-
-    private fun launchQuickFloatingApp(targetPkg: String) {
-        val launchIntent = packageManager.getLaunchIntentForPackage(targetPkg)
-        if (launchIntent == null) {
-            Toast.makeText(this, "App not installed", Toast.LENGTH_SHORT).show()
-            return
-        }
-        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                val opts = ActivityOptions.makeBasic()
-                val dm = resources.displayMetrics
-                val w = (dm.widthPixels * 0.45f).toInt()
-                val h = (dm.heightPixels * 0.55f).toInt()
-                opts.setLaunchBounds(Rect(60, 120, 60 + w, 120 + h))
-                startActivity(launchIntent, opts.toBundle())
-            } else {
-                startActivity(launchIntent)
-            }
-        } catch (_: Exception) {
-            startActivity(launchIntent)
+            else -> Unit
         }
     }
 
