@@ -35,8 +35,6 @@ import android.view.MotionEvent
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -102,7 +100,6 @@ class GameTurboOverlayService : Service() {
         private const val SAFE_OVERLAY_FLAGS =
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
 
         @Volatile
@@ -186,22 +183,13 @@ class GameTurboOverlayService : Service() {
         mainHandler.post { Choreographer.getInstance().removeFrameCallback(frameCallback) }
     }
 
-    private fun applyCutoutEdgeFlush(params: WindowManager.LayoutParams, isLeftEdge: Boolean = false) {
+    private fun applyCutoutSafeMode(params: WindowManager.LayoutParams) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             params.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-            if (isLeftEdge) {
-                val cutoutLeft = try {
-                    windowManager.currentWindowMetrics.windowInsets.displayCutout?.safeInsetLeft ?: 0
-                } catch (_: Exception) {
-                    0
-                }
-                params.x = if (cutoutLeft > 0) -cutoutLeft else -12
-            }
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             params.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            if (isLeftEdge) params.x = -12
         }
     }
 
@@ -305,7 +293,6 @@ class GameTurboOverlayService : Service() {
                 mainHandler.post { showEdgePill() }
             }
         } else {
-            // Do not dismiss during manual game launch transition
             if (System.currentTimeMillis() < manualLaunchGraceUntil && activeGamePackage != null) {
                 return
             }
@@ -346,7 +333,6 @@ class GameTurboOverlayService : Service() {
         mainHandler.post { hideAllOverlays() }
     }
 
-    // Sound plays ONLY here when Game Launches
     private fun showGameLaunchAnimationHud(pkg: String) {
         if (!Settings.canDrawOverlays(this)) return
         dismissLaunchBanner()
@@ -367,8 +353,8 @@ class GameTurboOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = 32
-            applyCutoutEdgeFlush(this)
+            y = 28
+            applyCutoutSafeMode(this)
         }
 
         val visibleState = MutableStateFlow(true)
@@ -376,36 +362,36 @@ class GameTurboOverlayService : Service() {
             val vis by visibleState.collectAsStateWithLifecycle()
             AnimatedVisibility(
                 visible = vis,
-                enter = fadeIn(tween(220)) + slideInVertically(initialOffsetY = { -it }),
-                exit = fadeOut(tween(240)) + slideOutVertically(targetOffsetY = { -it })
+                enter = fadeIn(tween(180)) + slideInVertically(initialOffsetY = { -it }),
+                exit = fadeOut(tween(200)) + slideOutVertically(targetOffsetY = { -it })
             ) {
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xF5060911))
                         .border(
-                            width = 1.6.dp,
+                            width = 1.5.dp,
                             brush = Brush.horizontalGradient(
                                 listOf(Color(0xFF00E5FF), Color(0xFFD500F9), Color(0xFF00E676))
                             ),
                             shape = RoundedCornerShape(16.dp)
                         )
-                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("⚡", fontSize = 16.sp, color = Color(0xFF00E5FF))
+                    Text("⚡", fontSize = 15.sp, color = Color(0xFF00E5FF))
                     Column {
                         Text(
                             text = "GAME MAGIC • AI BOOST ENGAGED",
                             color = Color(0xFF00E5FF),
-                            fontSize = 10.sp,
+                            fontSize = 9.5.sp,
                             fontWeight = FontWeight.Black
                         )
                         Text(
-                            text = "$gameLabel • Zero-Lag Mode Active",
+                            text = "$gameLabel • Smooth Mode Active",
                             color = Color.White,
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -415,8 +401,8 @@ class GameTurboOverlayService : Service() {
 
         try {
             windowManager.addView(launchBannerView, params)
-            mainHandler.postDelayed({ visibleState.value = false }, 1500L)
-            mainHandler.postDelayed({ dismissLaunchBanner() }, 1800L)
+            mainHandler.postDelayed({ visibleState.value = false }, 1400L)
+            mainHandler.postDelayed({ dismissLaunchBanner() }, 1650L)
         } catch (_: Exception) {
         }
     }
@@ -443,7 +429,7 @@ class GameTurboOverlayService : Service() {
         monitorJob = serviceScope.launch {
             val usm = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             while (isActive) {
-                delay(1200L)
+                delay(1000L)
                 val selected = getAllSelectedGames()
 
                 if (selected.isEmpty()) {
@@ -564,7 +550,7 @@ class GameTurboOverlayService : Service() {
         }
     }
 
-    // Silent Edge Pill (Zero sound when swiping/opening sidebar)
+    // Instant-touch Edge Pill (Opens immediately on tap or quick drag)
     private fun showEdgePill() {
         if (!Settings.canDrawOverlays(this) || edgeTriggerView != null || activeGamePackage == null) return
         val params = WindowManager.LayoutParams(
@@ -575,8 +561,9 @@ class GameTurboOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            y = -40
-            applyCutoutEdgeFlush(this, isLeftEdge = true)
+            x = 0
+            y = -30
+            applyCutoutSafeMode(this)
         }
         edgeParams = params
 
@@ -586,8 +573,8 @@ class GameTurboOverlayService : Service() {
 
             Box(
                 modifier = Modifier
-                    .width(22.dp)
-                    .height(82.dp)
+                    .width(24.dp)
+                    .height(84.dp)
                     .clip(shape)
                     .background(Color(0xF5060911))
                     .border(
@@ -597,6 +584,7 @@ class GameTurboOverlayService : Service() {
                         ),
                         shape = shape
                     )
+                    .clickable { openSidePanel() }
                     .pointerInput(Unit) {
                         detectDragGestures(
                             onDragStart = { dragAccumX = 0f },
@@ -606,7 +594,7 @@ class GameTurboOverlayService : Service() {
                                 dragAccumX += dragAmount.x
                                 if (kotlin.math.abs(dragAmount.y) > 0.5f) {
                                     edgeParams?.let { lp ->
-                                        lp.y = (lp.y + dragAmount.y.roundToInt()).coerceIn(-480, 480)
+                                        lp.y = (lp.y + dragAmount.y.roundToInt()).coerceIn(-420, 420)
                                         edgeTriggerView?.let { v ->
                                             try {
                                                 windowManager.updateViewLayout(v, lp)
@@ -615,20 +603,19 @@ class GameTurboOverlayService : Service() {
                                         }
                                     }
                                 }
-                                if (dragAccumX > 14f) {
+                                if (dragAccumX > 8f) {
                                     dragAccumX = 0f
                                     openSidePanel()
                                 }
                             }
                         )
-                    }
-                    .clickable { openSidePanel() },
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
                         .width(3.5.dp)
-                        .height(42.dp)
+                        .height(44.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.verticalGradient(
@@ -663,7 +650,8 @@ class GameTurboOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            applyCutoutEdgeFlush(this, isLeftEdge = true)
+            x = 0
+            applyCutoutSafeMode(this)
         }
 
         panelHostView = createComposeView {
@@ -679,7 +667,7 @@ class GameTurboOverlayService : Service() {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = if (expanded) 0.35f else 0f))
+                    .background(Color.Black.copy(alpha = if (expanded) 0.32f else 0f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -688,16 +676,13 @@ class GameTurboOverlayService : Service() {
             ) {
                 AnimatedVisibility(
                     visible = expanded,
-                    enter = fadeIn(tween(180)) + slideInHorizontally(
+                    enter = fadeIn(tween(120)) + slideInHorizontally(
                         initialOffsetX = { -it },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
+                        animationSpec = tween(140, easing = androidx.compose.animation.core.FastOutSlowInEasing)
                     ),
-                    exit = fadeOut(tween(140)) + slideOutHorizontally(
+                    exit = fadeOut(tween(110)) + slideOutHorizontally(
                         targetOffsetX = { -it },
-                        animationSpec = tween(150)
+                        animationSpec = tween(120)
                     )
                 ) {
                     CompactSwipeUpSidebar(
@@ -731,7 +716,7 @@ class GameTurboOverlayService : Service() {
         mainHandler.postDelayed({
             destroyComposeView(panelHostView)
             panelHostView = null
-        }, 160L)
+        }, 125L)
     }
 
     private fun handleSidebarAction(action: ProSidebarAction) {
@@ -746,7 +731,7 @@ class GameTurboOverlayService : Service() {
                     } else {
                         "⚡ Cache Cleared • Smooth Mode Active"
                     }
-                    delay(2200L)
+                    delay(2000L)
                     boostReadout.value = null
                 }
             }
@@ -755,7 +740,7 @@ class GameTurboOverlayService : Service() {
                     val res = SystemTelemetryEngine.boostMemory(applicationContext, aggressive = false)
                     RedMagicEngine.refreshHardware(applicationContext)
                     boostReadout.value = if (res.freedMb > 0) "RAM Freed +${res.freedMb} MB" else "RAM Optimized"
-                    delay(2000L)
+                    delay(1800L)
                     boostReadout.value = null
                 }
             }
@@ -763,7 +748,7 @@ class GameTurboOverlayService : Service() {
                 serviceScope.launch {
                     RedMagicEngine.refreshHardware(applicationContext)
                     boostReadout.value = "Ping Stabilized (${RedMagicEngine.hardware.value.pingMs} ms)"
-                    delay(2000L)
+                    delay(1800L)
                     boostReadout.value = null
                 }
             }
@@ -773,7 +758,7 @@ class GameTurboOverlayService : Service() {
                     if (!GameAccessibilityService.triggerSystemScreenshot()) {
                         Toast.makeText(this, "Enable Game Magic Accessibility", Toast.LENGTH_SHORT).show()
                     }
-                }, 200L)
+                }, 180L)
             }
             ProSidebarAction.ToggleScreenRecording -> {
                 if (RedMagicEngine.state.value.isRecording) {
@@ -830,7 +815,7 @@ class GameTurboOverlayService : Service() {
                 aiFpsGuardEnabled.value = action.enabled
                 boostReadout.value = if (action.enabled) "AI Auto-FPS Guard Active" else "AI FPS Guard Off"
                 serviceScope.launch {
-                    delay(1600L)
+                    delay(1500L)
                     boostReadout.value = null
                 }
             }
@@ -840,7 +825,7 @@ class GameTurboOverlayService : Service() {
                     serviceScope.launch {
                         SystemTelemetryEngine.boostMemory(applicationContext, aggressive = false)
                         boostReadout.value = "AI Network & RAM Isolation Active"
-                        delay(1800L)
+                        delay(1600L)
                         boostReadout.value = null
                     }
                 }
@@ -885,7 +870,7 @@ class GameTurboOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.CENTER
-            applyCutoutEdgeFlush(this)
+            applyCutoutSafeMode(this)
         }
         crosshairOverlayView = createComposeView {
             val style by crosshairStyleIndex.collectAsStateWithLifecycle()
@@ -956,7 +941,7 @@ class GameTurboOverlayService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = 120
             y = 18
-            applyCutoutEdgeFlush(this)
+            applyCutoutSafeMode(this)
         }
         miniCounterView = createComposeView {
             val hw by RedMagicEngine.hardware.collectAsStateWithLifecycle()
@@ -995,7 +980,7 @@ class GameTurboOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP
-            applyCutoutEdgeFlush(this)
+            applyCutoutSafeMode(this)
         }
 
         statusBarBlockerView = createComposeView {
@@ -1023,7 +1008,7 @@ class GameTurboOverlayService : Service() {
             SAFE_OVERLAY_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
-            applyCutoutEdgeFlush(this)
+            applyCutoutSafeMode(this)
         }
         filterOverlayView = createComposeView {
             val rm by RedMagicEngine.state.collectAsStateWithLifecycle()
